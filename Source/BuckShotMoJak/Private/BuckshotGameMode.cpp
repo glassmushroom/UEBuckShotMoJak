@@ -54,31 +54,44 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
-	if(Magazine.Num() == 0)return false;
+	if (Magazine.Num() == 0) return false;
 
-	EBulletType FiredShell = Magazine.Pop();
+	EBulletType CurrentShell = Magazine[0];
+	Magazine.RemoveAt(0);
 
-	OnShotFired.Broadcast(FiredShell, Target);
+	int32 Damage = IsSawOff ? 2 : 1;
+	IsSawOff = false; // 사격 후 톱 효과 해제
 
-	IsSawOff = false;
-
-	if (Target == ETargetType::Self && FiredShell == EBulletType::Blank)
+	if (CurrentShell == EBulletType::Live)
 	{
+		// 실탄 사격
+		if ((IsPlayerTurn && Target == ETargetType::Opponent) || (!IsPlayerTurn && Target == ETargetType::Self))
+		{
+			DealerHP = FMath::Max(0, DealerHP - Damage);
+		}
+		else
+		{
+			PlayerHP = FMath::Max(0, PlayerHP - Damage);
+		}
 
+		SwitchTurn();
 	}
 	else
 	{
-		SwitchTurn();
+		// 공포탄 사격
+		if (Target == ETargetType::Opponent)
+		{
+			SwitchTurn();
+		}
 	}
 
-	if (Magazine.Num() == 0)
+	if (OnShotFired.IsBound())
 	{
-		LoadMagazine();
+		OnShotFired.Broadcast(CurrentShell, Target);
 	}
 
 	return true;
 }
-
 void ABuckshotGameMode::SwitchTurn()
 {
 	if (IsCuff)
@@ -89,7 +102,6 @@ void ABuckshotGameMode::SwitchTurn()
 
 	IsPlayerTurn = !IsPlayerTurn;
 }
-
 //돋보기
 EBulletType ABuckshotGameMode::PeekNextShell()
 {
@@ -99,7 +111,6 @@ EBulletType ABuckshotGameMode::PeekNextShell()
 	}
 	return EBulletType::Blank;
 }
-
 //맥주
 EBulletType ABuckshotGameMode::EjectCurrentShell()
 {
@@ -111,5 +122,41 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 	}
 	return EBulletType::Blank;
 }
+//담배
+bool ABuckshotGameMode::UseCigarette()
+{
+	int32& CurrentHP = IsPlayerTurn ? PlayerHP : DealerHP;
+	if (CurrentHP < MaxHP)
+	{
+		CurrentHP++;
+		return true;
+	}
+	return false; // HP최대치면 사용X
+}
+//톱
+void ABuckshotGameMode::UseSaw()
+{
+	IsSawOff = true;
+}
+//수갑
+bool ABuckshotGameMode::UseHandcuffs()
+{
+	if (!IsCuff)
+	{
+		IsCuff = true;
+		return true;
+	}
+	return false; // 이미 수갑 상태면 사용 불가
+}
 
+// 핸드폰
+bool ABuckshotGameMode::UsePhone(int32& OutIndex, EBulletType& OutType)
+{
+	if (Magazine.Num() <= 1) return false; // 1발 이하면 효과X
+
+	// 무작위 위치 선택
+	OutIndex = FMath::RandRange(1, Magazine.Num() - 1);
+	OutType = Magazine[OutIndex];
+	return true;
+}
 

@@ -51,6 +51,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	bool IsCuff;
 
+	//HP
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	int32 PlayerHP;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	int32 DealerHP;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	int32 MaxHP;
+
 	//핵심 함수
 	UFUNCTION(BlueprintCallable, Category = "BuckShot | Logic")
 	void LoadMagazine(int32 MaxShells = 8);
@@ -65,12 +73,24 @@ public:
 	FOnShotFired OnShotFired;
 
 	//아이템 효과
+	//돋보기
 	UFUNCTION(BlueprintCallable,Category = "BuckShot | Items")
 	EBulletType PeekNextShell();
-
+	//맥주
 	UFUNCTION(BlueprintCallable,Category = "BuckShot | Items")
 	EBulletType EjectCurrentShell();
-
+	//담배
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
+	bool UseCigarette();
+	//톱
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
+	void UseSaw();
+	//수갑
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
+	bool UseHandcuffs();
+	//핸드폰
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
+	bool UsePhone(int32& OutIndex, EBulletType& OutType);
 private:
 	void SwitchTurn();
 };
