@@ -57,11 +57,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BuckShot | Logic")
 	bool ShootTarget(ETargetType Target);
 
-
+	//애니메이션 연결(아직 X)
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot | Event")
 	FOnShellsLoaded OnShellsLoaded;
+
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot | Event")
 	FOnShotFired OnShotFired;
+
+	//아이템 효과
+	UFUNCTION(BlueprintCallable,Category = "BuckShot | Items")
+	EBulletType PeekNextShell();
+
+	UFUNCTION(BlueprintCallable,Category = "BuckShot | Items")
+	EBulletType EjectCurrentShell();
 
 private:
 	void SwitchTurn();

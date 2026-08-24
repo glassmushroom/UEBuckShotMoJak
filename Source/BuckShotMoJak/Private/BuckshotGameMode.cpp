@@ -90,7 +90,26 @@ void ABuckshotGameMode::SwitchTurn()
 	IsPlayerTurn = !IsPlayerTurn;
 }
 
+//돋보기
+EBulletType ABuckshotGameMode::PeekNextShell()
+{
+	if (Magazine.Num() > 0)
+	{
+		return Magazine[0];
+	}
+	return EBulletType::Blank;
+}
 
-
+//맥주
+EBulletType ABuckshotGameMode::EjectCurrentShell()
+{
+	if (Magazine.Num() > 0)
+	{
+		EBulletType Ejected = Magazine[0];
+		Magazine.RemoveAt(0);
+		return Ejected;
+	}
+	return EBulletType::Blank;
+}
 
 
