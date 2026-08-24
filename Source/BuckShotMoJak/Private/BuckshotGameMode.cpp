@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "BuckshotGameMode.h"
+#include "HPWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Algo/RandomShuffle.h"
@@ -10,6 +11,11 @@ ABuckshotGameMode::ABuckshotGameMode()
 	IsPlayerTurn = false;
 	IsSawOff = false;
 	IsCuff = false;
+	CurrentRound = 0;
+	PlayerHP = 0;
+	DealerHP = 0;
+	MaxHP = 0;
+	HPWidgetInstance = nullptr;
 }
 
 void ABuckshotGameMode::BeginPlay() 
@@ -25,7 +31,6 @@ void ABuckshotGameMode::BeginPlay()
 			MainCameraActor = FoundActors[0];
 		}
 	}
-
 	//플레이어에게 카메라 고정
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
 	if (PC && MainCameraActor)
@@ -33,7 +38,24 @@ void ABuckshotGameMode::BeginPlay()
 		PC->SetViewTargetWithBlend(MainCameraActor, 0.0f);
 	}
 
-	LoadMagazine();
+	if (HPWidgetClass && PC)
+	{
+		HPWidgetInstance = CreateWidget<UHPWidget>(PC, HPWidgetClass);
+		if (HPWidgetInstance)
+		{
+			HPWidgetInstance->AddToViewport(9999);
+		}
+	}
+	//1라 시작
+	StartNextRound();
+}
+
+void ABuckshotGameMode::RefreshHPUI()
+{
+	if (HPWidgetInstance)
+	{
+		HPWidgetInstance->UpdateHPUI(CurrentRound, PlayerHP, DealerHP);
+	}
 }
 
 void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
@@ -74,6 +96,37 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 			PlayerHP = FMath::Max(0, PlayerHP - Damage);
 		}
 
+		RefreshHPUI();
+		// 1. 플레이어 HP가 0이 되면 라운드와 상관없이 즉시 패배 (딜러 승리)
+		if (PlayerHP <= 0)
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("GAME OVER - 딜러 승리!"));
+			}
+			return true;
+		}
+
+		// 2. 딜러 HP가 0이 되었을 때
+		if (DealerHP <= 0)
+		{
+			if (CurrentRound == 3)
+			{
+				// 3라운드에서 딜러 HP 0 -> 플레이어 최종 승리
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("VICTORY - 플레이어 최종 승리!"));
+				}
+			}
+			else
+			{
+				// 1~2라운드 -> 2초 뒤 다음 라운드로 진행
+				FTimerHandle RoundTimerHandle;
+				GetWorldTimerManager().SetTimer(RoundTimerHandle, this, &ABuckshotGameMode::StartNextRound, 2.0f, false);
+			}
+			return true;
+		}
+
 		SwitchTurn();
 	}
 	else
@@ -90,7 +143,40 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		OnShotFired.Broadcast(CurrentShell, Target);
 	}
 
+	// 탄창이 비었으면 재장전
+	if (Magazine.Num() == 0 && PlayerHP > 0 && DealerHP > 0)
+	{
+		LoadMagazine(CurrentRound == 1 ? 4 : 8);
+	}
 	return true;
+}
+void ABuckshotGameMode::StartNextRound()
+{
+	CurrentRound++;
+
+	if (CurrentRound > 3)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("모든 라운드 클리어!"));
+		}
+		return;
+	}
+	//라운드별 HP계산
+	MaxHP = CurrentRound * 2;
+	PlayerHP = MaxHP;
+	DealerHP = MaxHP;
+	IsPlayerTurn = true;
+
+	//재장전
+	LoadMagazine(CurrentRound == 1 ? 4 : 8);
+	RefreshHPUI();
+
+	if (GEngine)
+	{
+		FString RoundMsg = FString::Printf(TEXT("=== ROUND %d START ==="), CurrentRound);
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, RoundMsg);
+	}
 }
 void ABuckshotGameMode::SwitchTurn()
 {
@@ -118,6 +204,11 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 	{
 		EBulletType Ejected = Magazine[0];
 		Magazine.RemoveAt(0);
+		// 마지막 총알 배출했으면 재장전
+		if (Magazine.Num() == 0 && PlayerHP > 0 && DealerHP > 0)
+		{
+			LoadMagazine(CurrentRound == 1 ? 4 : 8);
+		}
 		return Ejected;
 	}
 	return EBulletType::Blank;
@@ -129,6 +220,7 @@ bool ABuckshotGameMode::UseCigarette()
 	if (CurrentHP < MaxHP)
 	{
 		CurrentHP++;
+		RefreshHPUI();//회복하면 UI갱신
 		return true;
 	}
 	return false; // HP최대치면 사용X

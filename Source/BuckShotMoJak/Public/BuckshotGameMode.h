@@ -6,6 +6,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "BuckshotGameMode.generated.h"
 
+class UHPWidget;
+
 //총알 종류
 UENUM(BlueprintType)
 enum class EBulletType : uint8
@@ -41,6 +43,10 @@ public:
 	UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "BuckShot|Set")
 	AActor* MainCameraActor;
 
+	//UI
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	TSubclassOf<UHPWidget> HPWidgetClass;
+
 	//게임 상태
 	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Buckshot|State")
 	TArray<EBulletType>Magazine;
@@ -52,6 +58,8 @@ public:
 	bool IsCuff;
 
 	//HP
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	int32 CurrentRound;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
 	int32 PlayerHP;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
@@ -59,11 +67,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
 	int32 MaxHP;
 
-	//핵심 함수
+	//라운드
 	UFUNCTION(BlueprintCallable, Category = "BuckShot | Logic")
 	void LoadMagazine(int32 MaxShells = 8);
 	UFUNCTION(BlueprintCallable, Category = "BuckShot | Logic")
 	bool ShootTarget(ETargetType Target);
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Logic")
+	void StartNextRound();
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
+	void RefreshHPUI();
 
 	//애니메이션 연결(아직 X)
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot | Event")
@@ -93,4 +105,7 @@ public:
 	bool UsePhone(int32& OutIndex, EBulletType& OutType);
 private:
 	void SwitchTurn();
+
+	UPROPERTY()
+	UHPWidget* HPWidgetInstance;
 };

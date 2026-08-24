@@ -18,11 +18,15 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	UButton* Start;
+	UPROPERTY(meta = (BindWidget))
+	UButton* Exit;
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Ui")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "UI")
 	FName MainLevelName = FName("MainLevel");
 
 private:
 	UFUNCTION()
 	void OnStartButtonClicked();
+	UFUNCTION()
+	void OnExitButtonClicked();
 };
