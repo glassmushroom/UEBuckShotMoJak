@@ -8,7 +8,7 @@ public class BuckShotMoJak : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-	PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "CinematicCamera" });
+	PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "CinematicCamera", "AIModule" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

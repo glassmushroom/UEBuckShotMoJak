@@ -8,14 +8,23 @@ void UHPWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	InitHPArrays();
+}
+
+void UHPWidget::InitHPArrays()
+{
 	PlayerHpArray = { PlayerHp1, PlayerHp2, PlayerHp3, PlayerHp4, PlayerHp5, PlayerHp6 };
 	DealerHpArray = { DealerHp1, DealerHp2, DealerHp3, DealerHp4, DealerHp5, DealerHp6 };
 }
 
 void UHPWidget::UpdateHPUI(int32 CurrentRound, int32 PlayerHP, int32 DealerHP)
 {
+	// 배열이 비어있다면 재초기화
+	if (PlayerHpArray.Num() == 0 || DealerHpArray.Num() == 0)
+	{
+		InitHPArrays();
+	}
 	int32 MaxHPForRound = CurrentRound * 2;
-
 	// 1. 플레이어 HP UI 업데이트
 	for (int32 i = 0; i < PlayerHpArray.Num(); ++i)
 	{
@@ -24,6 +33,8 @@ void UHPWidget::UpdateHPUI(int32 CurrentRound, int32 PlayerHP, int32 DealerHP)
 			if (i < MaxHPForRound)
 			{
 				PlayerHpArray[i]->SetVisibility(ESlateVisibility::Visible);
+
+				// 체력이 복구되면 투명도를 1.0f(완전 불투명)로, 닳았으면 0.2f로 설정
 				if (i < PlayerHP)
 				{
 					PlayerHpArray[i]->SetRenderOpacity(1.0f);
@@ -48,6 +59,7 @@ void UHPWidget::UpdateHPUI(int32 CurrentRound, int32 PlayerHP, int32 DealerHP)
 			if (i < MaxHPForRound)
 			{
 				DealerHpArray[i]->SetVisibility(ESlateVisibility::Visible);
+
 				if (i < DealerHP)
 				{
 					DealerHpArray[i]->SetRenderOpacity(1.0f);

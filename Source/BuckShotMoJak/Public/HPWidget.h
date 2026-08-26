@@ -50,4 +50,6 @@ private:
 
 	TArray<UImage*> PlayerHpArray;
 	TArray<UImage*> DealerHpArray;
+
+	void InitHPArrays();
 };

@@ -7,6 +7,20 @@
 #include "BuckshotGameMode.generated.h"
 
 class UHPWidget;
+class ADealrAIController;
+
+//아이템 종류
+UENUM(BlueprintType)
+enum class EItemType : uint8
+{
+	None        UMETA(DisplayName = "None"),
+	Magnifier   UMETA(DisplayName = "Magnifier"), // 돋보기
+	Beer        UMETA(DisplayName = "Beer"),      // 맥주
+	Cigarette   UMETA(DisplayName = "Cigarette"), // 담배
+	Saw         UMETA(DisplayName = "Saw"),       // 톱
+	Handcuffs   UMETA(DisplayName = "Handcuffs"), // 수갑
+	Phone       UMETA(DisplayName = "Phone")      // 핸드폰
+};
 
 //총알 종류
 UENUM(BlueprintType)
@@ -46,6 +60,8 @@ public:
 	//UI
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
 	TSubclassOf<UHPWidget> HPWidgetClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|UI")
+	TSubclassOf<class UUserWidget> BattleUIClass;
 
 	//게임 상태
 	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Buckshot|State")
@@ -103,9 +119,19 @@ public:
 	//핸드폰
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	bool UsePhone(int32& OutIndex, EBulletType& OutType);
+
+	// AI 참고용 Getter
+	int32 GetDealerHP() const { return DealerHP; }
+	int32 GetMaxHP() const { return MaxHP; }
+	bool GetIsSawOff() const { return IsSawOff; }
+	bool GetIsCuff() const { return IsCuff; }
+	int32 GetMagazineCount() const { return Magazine.Num(); }
+
 private:
 	void SwitchTurn();
-
+	void ResetCurrentRound();
+	void TriggerDealerTurn();
+	void DistributeItemsToDealer(int32 ItemCount);
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
 };
