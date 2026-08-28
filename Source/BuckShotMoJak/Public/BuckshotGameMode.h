@@ -132,6 +132,11 @@ private:
 	void ResetCurrentRound();
 	void TriggerDealerTurn();
 	void DistributeItemsToDealer(int32 ItemCount);
+
+	UPROPERTY()
+	class UUserWidget* BattleUIInstance;
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
+
+	void UpdateBattleUIState();
 };
