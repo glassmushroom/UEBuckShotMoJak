@@ -228,6 +228,12 @@ void ABuckshotGameMode::ResetCurrentRound()
 
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
+
+	if (bIsReloadTransitionPlaying)
+	{
+		return false;
+	}
+
 	if (Magazine.Num() == 0) return false;
 
 	EBulletType CurrentShell = Magazine[0];
@@ -344,7 +350,7 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 			GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("탄창이 완전히 비었습니다. 재장전을 진행합니다."));
 		}
 
-		LoadMagazine(CurrentRound == 1 ? 4 : 8);
+		HandleMagazineEmpty();
 	}
 	return true;
 }
@@ -423,6 +429,12 @@ EBulletType ABuckshotGameMode::PeekNextShell()
 // 맥주
 EBulletType ABuckshotGameMode::EjectCurrentShell()
 {
+
+	if (bIsReloadTransitionPlaying)
+	{
+		return EBulletType::Blank;
+	}
+
 	if (Magazine.Num() > 0)
 	{
 		EBulletType Ejected = Magazine[0];
@@ -436,7 +448,7 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 
 		if (Magazine.Num() == 0 && PlayerHP > 0 && DealerHP > 0)
 		{
-			LoadMagazine(CurrentRound == 1 ? 4 : 8);
+			HandleMagazineEmpty();
 		}
 		return Ejected;
 	}
