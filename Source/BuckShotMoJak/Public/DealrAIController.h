@@ -25,6 +25,8 @@ public:
 	//현재 인벤토리 수 반환
 	int32 GetInventoryCount()const { return Inventory.Num(); }
 
+	void ClearInventory() { Inventory.Empty(); }
+
 private:
 	void ShotDecision();
 	bool TryUseItem(); // AI 아이템 판단&실행

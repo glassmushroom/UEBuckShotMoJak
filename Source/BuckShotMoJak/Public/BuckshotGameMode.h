@@ -127,6 +127,13 @@ public:
 	bool GetIsCuff() const { return IsCuff; }
 	int32 GetMagazineCount() const { return Magazine.Num(); }
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	TArray<EItemType> PlayerInventory;
+
+	// 아이템 지급(플레이어 & 딜러)
+	UFUNCTION(BlueprintCallable, Category = "Buckshot|Items")
+	void DistributeItems(int32 ItemCount);
+
 private:
 	void SwitchTurn();
 	void ResetCurrentRound();
