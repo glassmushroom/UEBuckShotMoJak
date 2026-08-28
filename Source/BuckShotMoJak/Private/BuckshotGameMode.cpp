@@ -6,17 +6,24 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Algo/RandomShuffle.h"
+#include "RoundTransitionWidget.h"
 
 ABuckshotGameMode::ABuckshotGameMode()
 {
 	IsPlayerTurn = false;
 	IsSawOff = false;
 	IsCuff = false;
+	bIsReloadTransitionPlaying = false;
+
 	CurrentRound = 0;
 	PlayerHP = 0;
 	DealerHP = 0;
 	MaxHP = 0;
+
+	PendingReloadMaxShells = 0;
+
 	HPWidgetInstance = nullptr;
+	RoundTransitionWidgetInstance = nullptr;
 }
 
 void ABuckshotGameMode::BeginPlay()
@@ -55,6 +62,23 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
+	// 라운드 전환 UI
+	if (RoundTransitionWidgetClass && PC)
+	{
+		RoundTransitionWidgetInstance =
+			CreateWidget<URoundTransitionWidget>(PC, RoundTransitionWidgetClass);
+
+		if (RoundTransitionWidgetInstance)
+		{
+			RoundTransitionWidgetInstance->AddToViewport(10000);
+
+			RoundTransitionWidgetInstance->OnTransitionFinished.AddDynamic(
+				this,
+				&ABuckshotGameMode::OnReloadTransitionFinished
+			);
+		}
+	}
+
 	// 배틀 UI
 	if (BattleUIClass && PC)
 	{
@@ -75,6 +99,60 @@ void ABuckshotGameMode::RefreshHPUI()
 	{
 		HPWidgetInstance->UpdateHPUI(CurrentRound, PlayerHP, DealerHP);
 	}
+}
+
+void ABuckshotGameMode::HandleMagazineEmpty()
+{
+	// 이미 전환 연출 중이면 중복 실행 방지
+	if (bIsReloadTransitionPlaying)
+	{
+		return;
+	}
+
+	// 플레이어나 딜러가 죽었다면 재장전하지 않음
+	if (PlayerHP <= 0 || DealerHP <= 0)
+	{
+		return;
+	}
+
+	bIsReloadTransitionPlaying = true;
+
+	// 라운드별 최대 탄 수
+	PendingReloadMaxShells = (CurrentRound == 1) ? 4 : 8;
+
+	if (RoundTransitionWidgetInstance)
+	{
+		// BP_RoundUI에 현재 라운드 번호 전달
+		RoundTransitionWidgetInstance->PlayReloadTransition(CurrentRound);
+
+		// BP에서 종료 호출이 안 될 경우를 대비한 안전장치
+		GetWorldTimerManager().SetTimer(
+			ReloadTransitionFallbackHandle,
+			this,
+			&ABuckshotGameMode::OnReloadTransitionFinished,
+			2.0f,
+			false
+		);
+	}
+	else
+	{
+		// UI가 없다면 바로 재장전
+		OnReloadTransitionFinished();
+	}
+}
+
+void ABuckshotGameMode::OnReloadTransitionFinished()
+{
+	if (!bIsReloadTransitionPlaying)
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(ReloadTransitionFallbackHandle);
+
+	bIsReloadTransitionPlaying = false;
+
+	LoadMagazine(PendingReloadMaxShells);
 }
 
 void ABuckshotGameMode::LoadMagazine(int32 MaxShells)

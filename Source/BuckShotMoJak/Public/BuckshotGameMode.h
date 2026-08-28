@@ -7,6 +7,7 @@
 #include "BuckshotGameMode.generated.h"
 
 class UHPWidget;
+class URoundTransitionWidget;
 class ADealrAIController;
 
 //아이템 종류
@@ -62,6 +63,8 @@ public:
 	TSubclassOf<UHPWidget> HPWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|UI")
 	TSubclassOf<class UUserWidget> BattleUIClass;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
 	//게임 상태
 	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Buckshot|State")
@@ -72,6 +75,8 @@ public:
 	bool IsSawOff;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	bool IsCuff;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	bool bIsReloadTransitionPlaying;
 
 	//HP
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
@@ -132,6 +137,21 @@ private:
 	void ResetCurrentRound();
 	void TriggerDealerTurn();
 	void DistributeItemsToDealer(int32 ItemCount);
+
+	// 탄창이 모두 소진됐을 때
+	void HandleMagazineEmpty();
+
+	// BP_RoundUI 연출이 끝났을 때
+	UFUNCTION()
+	void OnReloadTransitionFinished();
+
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
-};
+
+	UPROPERTY()
+	URoundTransitionWidget* RoundTransitionWidgetInstance;
+
+	int32 PendingReloadMaxShells;
+
+	FTimerHandle ReloadTransitionFallbackHandle;
+};	
