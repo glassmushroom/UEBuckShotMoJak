@@ -1,10 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "DealrAIController.h"
 #include "BuckshotGameMode.h"
 #include "TimerManager.h"
-
+#include "Engine/Engine.h"
 
 ADealrAIController::ADealrAIController()
 {
@@ -19,19 +17,22 @@ void ADealrAIController::TakeTurn(ABuckshotGameMode* GameMode)
 
 	CachedGameMode = GameMode;
 
-	//탄창 카운트 동기화
+	// 탄창 카운트 동기화
+	KnowLiveCount = 0;
+	KnowBlankCount = 0;
 	for (EBulletType Shell : CachedGameMode->Magazine)
 	{
 		if (Shell == EBulletType::Live) KnowLiveCount++;
 		else KnowBlankCount++;
 	}
+
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, TEXT("[DealerAI] 턴을 받았습니다. 사고 시작..."));
+		GEngine->AddOnScreenDebugMessage(FMath::Rand(), 12.0f, FColor::Green, TEXT("[DealerAI] 턴을 받았습니다. 사고 시작..."));
 	}
 
 	FTimerHandle AIThinkingHandle;
-	GetWorldTimerManager().SetTimer(AIThinkingHandle, this, &ADealrAIController::ShotDecision,1.5f,false);
+	GetWorldTimerManager().SetTimer(AIThinkingHandle, this, &ADealrAIController::ShotDecision, 1.5f, false);
 }
 
 void ADealrAIController::AddItem(EItemType NewItem)
@@ -42,54 +43,10 @@ void ADealrAIController::AddItem(EItemType NewItem)
 	}
 }
 
-void ADealrAIController::ShotDecision()
+bool ADealrAIController::HasItem(EItemType ItemType, int32& OutIndex) const
 {
-	if (!CachedGameMode || CachedGameMode->IsPlayerTurn) return;
-
-		//HP 판단
-		if (CachedGameMode->DealerHP < CachedGameMode->MaxHP)
-		{
-			CachedGameMode->UseCigarette();
-		}
-
-		//사격 대상 결정
-		ETargetType DecisionTarget = ETargetType::Opponent;
-		int32 TotalShells = CachedGameMode->Magazine.Num();
-
-		if (TotalShells == 0) return;
-
-		if (KnowNextShell.IsSet())
-		{
-			if (*KnowNextShell == EBulletType::Live)
-			{
-				DecisionTarget = ETargetType::Opponent;
-				CachedGameMode->UseSaw();//실탄 확정이면 톱 사용
-			}
-			else
-			{
-				DecisionTarget = ETargetType::Self;//공포탄이면 자신 사격
-			}
-		}
-		else
-		{
-			float LiveProbability = (float)KnowLiveCount / (float)KnowBlankCount;//확률 계산
-
-			if (LiveProbability > 0.5f)
-			{
-				DecisionTarget = ETargetType::Opponent;
-				if (LiveProbability >= 0.75f) CachedGameMode->UseSaw();
-			}
-			else if (LiveProbability < 0.5f)
-			{
-				DecisionTarget = ETargetType::Self; // 공포탄 확률이 더 높아서 자신 쏘기
-			}
-			else
-			{
-				DecisionTarget = (FMath::RandRange(0, 1) == 0) ? ETargetType::Opponent : ETargetType::Self;
-			}
-		}
-		KnowNextShell.Reset();
-		CachedGameMode->ShootTarget(DecisionTarget);
+	OutIndex = Inventory.Find(ItemType);
+	return OutIndex != INDEX_NONE;
 }
 
 bool ADealrAIController::TryUseItem()
@@ -98,8 +55,7 @@ bool ADealrAIController::TryUseItem()
 
 	int32 ItemIdx = INDEX_NONE;
 
-	//아이템
-	//담배
+	// 1. 담배 (HP 회복)
 	if (CachedGameMode->GetDealerHP() < CachedGameMode->GetMaxHP() && HasItem(EItemType::Cigarette, ItemIdx))
 	{
 		if (CachedGameMode->UseCigarette())
@@ -108,22 +64,31 @@ bool ADealrAIController::TryUseItem()
 			return true;
 		}
 	}
-	//돋보기
+
+	// 2. 돋보기 (다음 총알 확인)
 	if (!KnowNextShell.IsSet() && HasItem(EItemType::Magnifier, ItemIdx))
 	{
 		KnowNextShell = CachedGameMode->PeekNextShell();
 		Inventory.RemoveAt(ItemIdx);
-		GEngine->AddOnScreenDebugMessage(-1, -1.f, FColor::Yellow, TEXT("[딜러 AI] 돋보기 사용 - 다음 총알 확인 완료"));
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(FMath::Rand(), 12.f, FColor::Yellow, TEXT("[딜러 AI] 돋보기 사용 - 다음 총알 확인 완료"));
+		}
 		return true;
 	}
-	//톱
+
+	// 3. 톱 (실탄 확정 시 데미지 2배) -> [수정] UseSaw() 직접 호출 추가
 	if (KnowNextShell.IsSet() && (*KnowNextShell == EBulletType::Live) && !CachedGameMode->GetIsSawOff())
 	{
 		if (HasItem(EItemType::Saw, ItemIdx))
+		{
+			CachedGameMode->UseSaw();
 			Inventory.RemoveAt(ItemIdx);
-		    return true;
+			return true;
+		}
 	}
-	//수갑
+
+	// 4. 수갑 (상대 턴 건너뜀)
 	if (!CachedGameMode->GetIsCuff() && HasItem(EItemType::Handcuffs, ItemIdx))
 	{
 		if (CachedGameMode->UseHandcuffs())
@@ -132,16 +97,17 @@ bool ADealrAIController::TryUseItem()
 			return true;
 		}
 	}
-	//맥주
+
+	// 5. 맥주 (공포탄 배출)
 	if (KnowNextShell.IsSet() && (*KnowNextShell == EBulletType::Blank) && HasItem(EItemType::Beer, ItemIdx))
 	{
-		int32 FoundIdx = 0;
 		CachedGameMode->EjectCurrentShell();
 		Inventory.RemoveAt(ItemIdx);
 		KnowNextShell.Reset();
 		return true;
 	}
-	// 6. 핸드폰
+
+	// 6. 핸드폰 (랜덤 위치 총알 확인)
 	if (CachedGameMode->GetMagazineCount() > 1 && HasItem(EItemType::Phone, ItemIdx))
 	{
 		int32 FoundIdx = 0;
@@ -149,7 +115,7 @@ bool ADealrAIController::TryUseItem()
 		if (CachedGameMode->UsePhone(FoundIdx, FoundType))
 		{
 			Inventory.RemoveAt(ItemIdx);
-			if (FoundIdx == 0) // 첫 번째 탄 정보였을 경우 기억에 저장
+			if (FoundIdx == 0)
 			{
 				KnowNextShell = FoundType;
 			}
@@ -157,11 +123,66 @@ bool ADealrAIController::TryUseItem()
 		}
 	}
 
-	return false; // 사용 가능 아이템 X
+	return false; // 사용할 수 있는 아이템 없음
 }
 
-bool ADealrAIController::HasItem(EItemType ItemType, int32& OutIndex) const
+void ADealrAIController::ShotDecision()
 {
-	OutIndex = Inventory.Find(ItemType);
-	return OutIndex != INDEX_NONE;
+	if (!CachedGameMode || CachedGameMode->IsPlayerTurn) return;
+
+	// 1. 아이템 사용 시도 (아이템을 보유하고 있을 때만 정당하게 사용)
+	bool bUsedItem = TryUseItem();
+
+	// 아이템을 사용했다면 1.2초 후 행동 재판단 (아이템 연속 사용 또는 사격)
+	if (bUsedItem)
+	{
+		FTimerHandle ItemTimerHandle;
+		GetWorldTimerManager().SetTimer(ItemTimerHandle, [this]()
+			{
+				this->ShotDecision();
+			}, 1.2f, false);
+		return;
+	}
+
+	// 2. 사격 대상 결정 (더 이상 쓸 아이템이 없을 때 진행)
+	ETargetType DecisionTarget = ETargetType::Opponent;
+	int32 TotalShells = CachedGameMode->Magazine.Num();
+
+	if (TotalShells == 0) return;
+
+	if (KnowNextShell.IsSet())
+	{
+		if (*KnowNextShell == EBulletType::Live)
+		{
+			DecisionTarget = ETargetType::Opponent;
+		}
+		else
+		{
+			DecisionTarget = ETargetType::Self; // 공포탄이면 자신 사격
+		}
+	}
+	else
+	{
+		float LiveProbability = 0.5f;
+		if (KnowBlankCount > 0)
+		{
+			LiveProbability = (float)KnowLiveCount / (float)(KnowLiveCount + KnowBlankCount);
+		}
+
+		if (LiveProbability > 0.5f)
+		{
+			DecisionTarget = ETargetType::Opponent;
+		}
+		else if (LiveProbability < 0.5f)
+		{
+			DecisionTarget = ETargetType::Self;
+		}
+		else
+		{
+			DecisionTarget = (FMath::RandRange(0, 1) == 0) ? ETargetType::Opponent : ETargetType::Self;
+		}
+	}
+
+	KnowNextShell.Reset();
+	CachedGameMode->ShootTarget(DecisionTarget);
 }
