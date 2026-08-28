@@ -1,5 +1,6 @@
 	// Fill out your copyright notice in the Description page of Project Settings.
 
+<<<<<<<<< Temporary merge branch 1
 	#include "BuckshotGameMode.h"
 	#include "DealrAIController.h"
 	#include "HPWidget.h"
@@ -8,6 +9,40 @@
 	#include "Algo/RandomShuffle.h"
 
 	ABuckshotGameMode::ABuckshotGameMode()
+=========
+#include "BuckshotGameMode.h"
+#include "DealrAIController.h"
+#include "HPWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
+#include "Algo/RandomShuffle.h"
+#include "RoundTransitionWidget.h"
+
+ABuckshotGameMode::ABuckshotGameMode()
+{
+	IsPlayerTurn = false;
+	IsSawOff = false;
+	IsCuff = false;
+	bIsReloadTransitionPlaying = false;
+
+	CurrentRound = 0;
+	PlayerHP = 0;
+	DealerHP = 0;
+	MaxHP = 0;
+
+	PendingReloadMaxShells = 0;
+
+	HPWidgetInstance = nullptr;
+	RoundTransitionWidgetInstance = nullptr;
+}
+
+void ABuckshotGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (PC)
+>>>>>>>>> Temporary merge branch 2
 	{
 		IsPlayerTurn = false;
 		IsSawOff = false;
@@ -56,28 +91,51 @@
 			}
 		}
 
-		if (BattleUIClass && PC)
+	// 배틀 UI
+	if (BattleUIClass && PC)
+	{
+		UUserWidget* BattleUIInstance = CreateWidget<UUserWidget>(PC, BattleUIClass);
+		if (BattleUIInstance)
 		{
-			BattleUIInstance = CreateWidget<UUserWidget>(PC, BattleUIClass);
-			if (BattleUIInstance)
-			{
-				BattleUIInstance->AddToViewport();
-			}
+			BattleUIInstance->AddToViewport();
 		}
+	}
 
 		// 1라운드 시작
 		StartNextRound();
 	}
 
-	void ABuckshotGameMode::RefreshHPUI()
+void ABuckshotGameMode::RefreshHPUI()
+{
+	if (HPWidgetInstance)
 	{
-		if (HPWidgetInstance)
+		HPWidgetInstance->UpdateHPUI(CurrentRound, PlayerHP, DealerHP);
+	}
+}
+
+<<<<<<<<< Temporary merge branch 1
+	void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
+=========
+	// 라운드 전환 UI
+	if (RoundTransitionWidgetClass && PC)
+	{
+		RoundTransitionWidgetInstance =
+			CreateWidget<URoundTransitionWidget>(PC, RoundTransitionWidgetClass);
+
+		if (RoundTransitionWidgetInstance)
 		{
-			HPWidgetInstance->UpdateHPUI(CurrentRound, PlayerHP, DealerHP);
+			RoundTransitionWidgetInstance->AddToViewport(10000);
+
+			RoundTransitionWidgetInstance->OnTransitionFinished.AddDynamic(
+				this,
+				&ABuckshotGameMode::OnReloadTransitionFinished
+			);
 		}
 	}
 
-	void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
+	// 배틀 UI
+	if (BattleUIClass && PC)
+>>>>>>>>> Temporary merge branch 2
 	{
 		Magazine.Empty();
 
@@ -216,9 +274,9 @@
 		UpdateBattleUIState();
 	}
 
-	bool ABuckshotGameMode::ShootTarget(ETargetType Target)
-	{
-		if (Magazine.Num() == 0) return false;
+bool ABuckshotGameMode::ShootTarget(ETargetType Target)
+{
+	if (Magazine.Num() == 0) return false;
 
 		EBulletType CurrentShell = Magazine[0];
 		Magazine.RemoveAt(0);
@@ -334,10 +392,10 @@
 				GEngine->AddOnScreenDebugMessage(FMath::Rand(), 12.0f, FColor::Yellow, TEXT("탄창이 완전히 비었습니다. 재장전을 진행합니다."));
 			}
 
-			LoadMagazine(CurrentRound == 1 ? 4 : 8);
-		}
-		return true;
+		LoadMagazine(CurrentRound == 1 ? 4 : 8);
 	}
+	return true;
+}
 
 	void ABuckshotGameMode::StartNextRound()
 	{
@@ -487,13 +545,13 @@
 		return EBulletType::Blank;
 	}
 
-	// 맥주
-	EBulletType ABuckshotGameMode::EjectCurrentShell()
+// 맥주
+EBulletType ABuckshotGameMode::EjectCurrentShell()
+{
+	if (Magazine.Num() > 0)
 	{
-		if (Magazine.Num() > 0)
-		{
-			EBulletType Ejected = Magazine[0];
-			Magazine.RemoveAt(0);
+		EBulletType Ejected = Magazine[0];
+		Magazine.RemoveAt(0);
 
 			if (GEngine)
 			{
@@ -501,14 +559,14 @@
 				GEngine->AddOnScreenDebugMessage(FMath::Rand(), 12.0f, FColor::Orange, FString::Printf(TEXT("[맥주 사용] 배출된 총알: %s"), *EjectStr));
 			}
 
-			if (Magazine.Num() == 0 && PlayerHP > 0 && DealerHP > 0)
-			{
-				LoadMagazine(CurrentRound == 1 ? 4 : 8);
-			}
-			return Ejected;
+		if (Magazine.Num() == 0 && PlayerHP > 0 && DealerHP > 0)
+		{
+			LoadMagazine(CurrentRound == 1 ? 4 : 8);
 		}
-		return EBulletType::Blank;
+		return Ejected;
 	}
+	return EBulletType::Blank;
+}
 
 	// 담배
 	bool ABuckshotGameMode::UseCigarette()

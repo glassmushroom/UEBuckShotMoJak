@@ -140,10 +140,7 @@ private:
 	void TriggerDealerTurn();
 	void DistributeItemsToDealer(int32 ItemCount);
 
-	UPROPERTY()
-	class UUserWidget* BattleUIInstance;
+<<<<<<<<< Temporary merge branch 1
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
-
-	void UpdateBattleUIState();
 };
