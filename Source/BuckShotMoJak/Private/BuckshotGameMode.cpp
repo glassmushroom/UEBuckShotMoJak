@@ -123,14 +123,14 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 	if (RoundTransitionWidgetInstance)
 	{
 		// BP_RoundUI에 현재 라운드 번호 전달
-		RoundTransitionWidgetInstance->PlayReloadTransition(CurrentRound);
+		RoundTransitionWidgetInstance->PlayReloadTransition( FMath::Min(CurrentRound + 1, 3) );
 
 		// BP에서 종료 호출이 안 될 경우를 대비한 안전장치
 		GetWorldTimerManager().SetTimer(
 			ReloadTransitionFallbackHandle,
 			this,
 			&ABuckshotGameMode::OnReloadTransitionFinished,
-			2.0f,
+			5.0f,
 			false
 		);
 	}
@@ -152,7 +152,7 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 
 	bIsReloadTransitionPlaying = false;
 
-	LoadMagazine(PendingReloadMaxShells);
+	StartNextRound();
 }
 
 void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
