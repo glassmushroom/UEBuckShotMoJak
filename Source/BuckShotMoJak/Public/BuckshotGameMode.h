@@ -7,6 +7,7 @@
 #include "BuckshotGameMode.generated.h"
 
 class UHPWidget;
+class URoundTransitionWidget;
 class ADealrAIController;
 
 //아이템 종류
@@ -62,6 +63,8 @@ public:
 	TSubclassOf<UHPWidget> HPWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|UI")
 	TSubclassOf<class UUserWidget> BattleUIClass;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
 	//게임 상태
 	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Buckshot|State")
@@ -72,6 +75,8 @@ public:
 	bool IsSawOff;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	bool IsCuff;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	bool bIsReloadTransitionPlaying;
 
 	//HP
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
@@ -139,11 +144,6 @@ private:
 	void ResetCurrentRound();
 	void TriggerDealerTurn();
 	void DistributeItemsToDealer(int32 ItemCount);
-
-	UPROPERTY()
-	class UUserWidget* BattleUIInstance;
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
-
-	void UpdateBattleUIState();
 };
