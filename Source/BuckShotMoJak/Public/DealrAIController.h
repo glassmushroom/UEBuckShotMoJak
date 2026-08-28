@@ -18,7 +18,7 @@ public:
 	void TakeTurn(ABuckshotGameMode* GameMode);
 
 	//인벤토리
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dealer | Item");
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dealer | Item")
 	TArray<EItemType>Inventory;
 	//아이템 추가
 	void AddItem(EItemType NewItem);
