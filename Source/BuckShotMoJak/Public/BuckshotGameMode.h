@@ -152,6 +152,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EItemType> PlayerInventory;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	TArray<EItemType> DealerInventory;
+
 	// 아이템 지급
 	UFUNCTION(BlueprintCallable, Category = "Buckshot|Items")
 	void DistributeItems(int32 ItemCount);

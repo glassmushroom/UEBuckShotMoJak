@@ -200,14 +200,55 @@ void ABuckshotGameMode::TriggerDealerTurn()
 	}
 }
 
+
 void ABuckshotGameMode::DistributeItems(int32 ItemCount)
 {
+	const TArray<EItemType> AvailableItems = {
+		EItemType::Magnifier,
+		EItemType::Beer,
+		EItemType::Cigarette,
+		EItemType::Saw,
+		EItemType::Handcuffs,
+		EItemType::Phone
+	};
 
+	// 플레이어 아이템 지급 (최대 8개)
+	for (int32 i = 0; i < ItemCount; ++i)
+	{
+		if (PlayerInventory.Num() >= 8) break;
+
+		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
+		PlayerInventory.Add(AvailableItems[RandomIndex]);
+	}
+
+	// 딜러 아이템 지급
+	DistributeItemsToDealer(ItemCount);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Green, FString::Printf(TEXT("[아이템 지급] 플레이어와 딜러에게 각각 %d개 지급 완료"), ItemCount));
+	}
 }
 
 void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 {
+	const TArray<EItemType> AvailableItems = {
+		EItemType::Magnifier,
+		EItemType::Beer,
+		EItemType::Cigarette,
+		EItemType::Saw,
+		EItemType::Handcuffs,
+		EItemType::Phone
+	};
 
+	// 딜러 아이템 지급 (인벤토리 최대 8개 제한)
+	for (int32 i = 0; i < ItemCount; ++i)
+	{
+		if (DealerInventory.Num() >= 8) break;
+
+		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
+		DealerInventory.Add(AvailableItems[RandomIndex]);
+	}
 }
 
 void ABuckshotGameMode::ResetCurrentRound()
@@ -369,6 +410,22 @@ void ABuckshotGameMode::StartNextRound()
 
 	// 라운드 시작 시 전환 UI 연출 실행
 	PlayRoundTransitionUI(CurrentRound);
+
+	// 라운드별 아이템 지급 개수 설정 (1라운드: 0개, 2라운드: 2개, 3라운드: 4개)
+	int32 ItemsToGive = 0;
+	if (CurrentRound == 2)
+	{
+		ItemsToGive = 2;
+	}
+	else if (CurrentRound == 3)
+	{
+		ItemsToGive = 4;
+	}
+
+	if (ItemsToGive > 0)
+	{
+		DistributeItems(ItemsToGive);
+	}
 
 	if (GEngine)
 	{
