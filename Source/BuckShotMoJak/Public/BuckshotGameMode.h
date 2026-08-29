@@ -173,4 +173,6 @@ private:
 	URoundTransitionWidget* RoundTransitionWidgetInstance;
 
 	FTimerHandle ReloadTransitionFallbackHandle;
+	FTimerHandle RoundTimerHandle;
+	FTimerHandle RestartTimerHandle;
 };
