@@ -113,16 +113,17 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 		return;
 	}
 
-	//  라운드 UI(PlayRoundTransitionUI)를 부르지 않고 direct로 재장전 처리
+
 	bIsReloadTransitionPlaying = true;
 
 	if (RoundTransitionWidgetInstance)
 	{
+		
 		GetWorldTimerManager().SetTimer(
 			ReloadTransitionFallbackHandle,
 			this,
 			&ABuckshotGameMode::OnReloadTransitionFinished,
-			1.5f, // 재장전 딜레이
+			1.5f, // 재장전 딜레이 (필요에 따라 조절)
 			false
 		);
 	}
@@ -162,14 +163,25 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 
 	if (Magazine.Num() == 0)
 	{
-		// 탄창 재장전
+		// 1. 탄창 재장전
 		LoadMagazine(CurrentRound == 1 ? 4 : 8);
 
-		// 재장전 완료 후 플레이어 턴 지정
-		IsPlayerTurn = true;
-		if (GEngine)
+		if (IsPlayerTurn)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Blue, TEXT(">>> [플레이어 턴] <<<"));
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Blue, TEXT(">>> [플레이어 턴 계속] <<<"));
+			}
+		}
+		else
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Yellow, TEXT(">>> [딜러 턴 계속] <<<"));
+			}
+			// 딜러 턴이었다면 재장전 후 딜러 AI 동작 재개
+			FTimerHandle DealerTurnTimer;
+			GetWorldTimerManager().SetTimer(DealerTurnTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
 		}
 	}
 }
