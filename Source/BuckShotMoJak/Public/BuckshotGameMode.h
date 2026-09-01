@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,38 +6,28 @@
 
 class UHPWidget;
 class URoundTransitionWidget;
-class ADealrAIController;
 
-// 아이템 종류
+// Enum 선언부
 UENUM(BlueprintType)
 enum class EItemType : uint8
 {
-	None        UMETA(DisplayName = "None"),
-	Magnifier   UMETA(DisplayName = "Magnifier"), // 돋보기
-	Beer        UMETA(DisplayName = "Beer"),      // 맥주
-	Cigarette   UMETA(DisplayName = "Cigarette"), // 담배
-	Saw         UMETA(DisplayName = "Saw"),       // 톱
-	Handcuffs   UMETA(DisplayName = "Handcuffs"), // 수갑
-	Phone       UMETA(DisplayName = "Phone")      // 핸드폰
+	None, Magnifier, Beer, Cigarette, Saw, Handcuffs, Phone
 };
 
-// 총알 종류
 UENUM(BlueprintType)
 enum class EBulletType : uint8
 {
-	Live,
-	Blank
+	Live, Blank
 };
 
-// 대상
 UENUM(BlueprintType)
 enum class ETargetType : uint8
 {
-	Self,
-	Opponent
+	Self, Opponent
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShellsLoaded, int32, LiveCount, int32, BlankCount);
+// ★ 1개의 인자(TArray)를 넘기는 dynamic delegate로 변경
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShellsLoaded, const TArray<EBulletType>&, Magazine);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShotFired, EBulletType, ShellType, ETargetType, Target);
 
 UCLASS()
@@ -54,21 +42,18 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	// 카메라
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|Set")
 	AActor* MainCameraActor;
 
-	// UI
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
 	TSubclassOf<UHPWidget> HPWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|UI")
-	TSubclassOf<class UUserWidget> BattleUIClass;
+	TSubclassOf<class UBattleUIWidget> BattleUIClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
 	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
-	// 게임 상태
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EBulletType> Magazine;
 
@@ -84,7 +69,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	bool bIsReloadTransitionPlaying;
 
-	// HP
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	int32 CurrentRound;
 
@@ -97,7 +81,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
 	int32 MaxHP;
 
-	// 라운드 및 게임 로직
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Logic")
 	void LoadMagazine(int32 MaxShells = 8);
 
@@ -110,20 +93,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
 	void RefreshHPUI();
 
-	// 라운드 전환 UI 제어
 	void PlayRoundTransitionUI(int32 RoundToDisplay);
 
 	UFUNCTION()
 	void OnReloadTransitionFinished();
 
-	// 애니메이션 및 이벤트
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
 	FOnShellsLoaded OnShellsLoaded;
 
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
 	FOnShotFired OnShotFired;
 
-	// 아이템 효과
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	EBulletType PeekNextShell();
 
@@ -142,7 +122,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	bool UsePhone(int32& OutIndex, EBulletType& OutType);
 
-	// AI 참고용 Getter
 	int32 GetDealerHP() const { return DealerHP; }
 	int32 GetMaxHP() const { return MaxHP; }
 	bool GetIsSawOff() const { return IsSawOff; }
@@ -155,7 +134,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EItemType> DealerInventory;
 
-	// 아이템 지급
 	UFUNCTION(BlueprintCallable, Category = "Buckshot|Items")
 	void DistributeItems(int32 ItemCount);
 

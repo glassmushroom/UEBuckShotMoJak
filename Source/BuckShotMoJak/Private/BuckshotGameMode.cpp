@@ -1,5 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
+#include "BattleUIWidget.h"
 #include "BuckshotGameMode.h"
 #include "DealrAIController.h"
 #include "HPWidget.h"
@@ -82,7 +82,7 @@ void ABuckshotGameMode::BeginPlay()
 	// 배틀 UI 생성
 	if (BattleUIClass && PC)
 	{
-		UUserWidget* BattleUIInstance = CreateWidget<UUserWidget>(PC, BattleUIClass);
+		UUserWidget* BattleUIInstance = CreateWidget<UBattleUIWidget>(PC, BattleUIClass);
 		if (BattleUIInstance)
 		{
 			BattleUIInstance->AddToViewport();
@@ -161,28 +161,14 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 	GetWorldTimerManager().ClearTimer(ReloadTransitionFallbackHandle);
 	bIsReloadTransitionPlaying = false;
 
-	if (Magazine.Num() == 0)
-	{
-		// 1. 탄창 재장전
-		LoadMagazine(CurrentRound == 1 ? 4 : 8);
+	// ★ 라운드 UI 연출이 완전히 끝난 "지금" 탄창을 생성하고 UI에 쏩니다!
+	LoadMagazine(CurrentRound == 1 ? 4 : 8);
 
-		if (IsPlayerTurn)
-		{
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Blue, TEXT(">>> [플레이어 턴 계속] <<<"));
-			}
-		}
-		else
-		{
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Yellow, TEXT(">>> [딜러 턴 계속] <<<"));
-			}
-			// 딜러 턴이었다면 재장전 후 딜러 AI 동작 재개
-			FTimerHandle DealerTurnTimer;
-			GetWorldTimerManager().SetTimer(DealerTurnTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
-		}
+	if (!IsPlayerTurn)
+	{
+		// 딜러 턴인 경우 딜러 행동 시작
+		FTimerHandle DealerTurnTimer;
+		GetWorldTimerManager().SetTimer(DealerTurnTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
 	}
 }
 
@@ -194,9 +180,20 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 	int32 LiveCount = FMath::RandRange(1, TotalShells - 1);
 	int32 BlankCount = TotalShells - LiveCount;
 
+	// 1. 실탄과 공포탄을 순서대로 생성
 	for (int32 i = 0; i < LiveCount; ++i) Magazine.Add(EBulletType::Live);
 	for (int32 i = 0; i < BlankCount; ++i) Magazine.Add(EBulletType::Blank);
 
+	// 2. UI 표시 전용 배열을 복사하여 전달 (정렬된 상태 또는 보여주기용)
+	TArray<EBulletType> DisplayMagazine = Magazine;
+
+	if (OnShellsLoaded.IsBound())
+	{
+		// UI에는 섞이지 않은 보여주기용 배열을 보냄
+		OnShellsLoaded.Broadcast(DisplayMagazine);
+	}
+
+	// 3. 실제 총안에 들어갈 탄창 배열만 무작위 셔플
 	Algo::RandomShuffle(Magazine);
 
 	if (GEngine)
@@ -204,8 +201,6 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 		FString ReloadMsg = FString::Printf(TEXT("[재장전 완료] 총 %d발 (실탄: %d, 공탄: %d)"), TotalShells, LiveCount, BlankCount);
 		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Emerald, ReloadMsg);
 	}
-
-	OnShellsLoaded.Broadcast(LiveCount, BlankCount);
 }
 
 void ABuckshotGameMode::TriggerDealerTurn()
@@ -378,6 +373,12 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		}
 	}
 
+	// 탄환 소진 브로드캐스트 (남은 탄 수 전달)
+	if (OnShotFired.IsBound())
+	{
+		OnShotFired.Broadcast(CurrentShell, Target);
+	}
+
 	return true;
 }
 
@@ -407,20 +408,8 @@ void ABuckshotGameMode::StartNextRound()
 
 	RefreshHPUI();
 
-	// 라운드 시작 시 전환 UI 연출 실행
-	PlayRoundTransitionUI(CurrentRound);
-
-	// 라운드별 아이템 지급 개수 설정 (1라운드: 0개, 2라운드: 2개, 3라운드: 4개)
-	int32 ItemsToGive = 0;
-	if (CurrentRound == 2)
-	{
-		ItemsToGive = 2;
-	}
-	else if (CurrentRound == 3)
-	{
-		ItemsToGive = 4;
-	}
-
+	// 라운드별 아이템 지급
+	int32 ItemsToGive = (CurrentRound == 2) ? 2 : ((CurrentRound == 3) ? 4 : 0);
 	if (ItemsToGive > 0)
 	{
 		DistributeItems(ItemsToGive);
@@ -431,6 +420,8 @@ void ABuckshotGameMode::StartNextRound()
 		FString RoundMsg = FString::Printf(TEXT("=== ROUND %d START ==="), CurrentRound);
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, RoundMsg);
 	}
+
+	PlayRoundTransitionUI(CurrentRound);
 }
 
 void ABuckshotGameMode::ResetCurrentRound()
