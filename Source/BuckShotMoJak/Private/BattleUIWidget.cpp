@@ -10,115 +10,139 @@ void UBattleUIWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (ShootDealer)
-	{
-		ShootDealer->OnClicked.AddDynamic(this, &UBattleUIWidget::OnShootOpponentClicked);
-	}
-
-	if (ShootME)
-	{
-		ShootME->OnClicked.AddDynamic(this, &UBattleUIWidget::OnShootSelfClicked);
-	}
-
 	ABuckshotGameMode* GM = Cast<ABuckshotGameMode>(UGameplayStatics::GetGameMode(this));
 	if (GM)
 	{
-		GM->OnShellsLoaded.AddDynamic(this, &UBattleUIWidget::UpdateShells);
+		GM->OnShotFired.RemoveDynamic(this, &UBattleUIWidget::OnShotFiredHandler);
 		GM->OnShotFired.AddDynamic(this, &UBattleUIWidget::OnShotFiredHandler);
+
+		GM->OnShellsLoaded.RemoveDynamic(this, &UBattleUIWidget::OnShellsLoadedHandler);
+		GM->OnShellsLoaded.AddDynamic(this, &UBattleUIWidget::OnShellsLoadedHandler);
 	}
 }
 
-void UBattleUIWidget::OnShootOpponentClicked()
+void UBattleUIWidget::NativeDestruct()
 {
-	ABuckshotGameMode* GM = Cast<ABuckshotGameMode>(UGameplayStatics::GetGameMode(this));
-	if (GM && GM->IsPlayerTurn)
+	ClearAllShellIcons();
+	Super::NativeDestruct();
+}
+
+void UBattleUIWidget::SetButtonsEnabled(bool bInEnable)
+{
+	// 만약 켜려고(true) 하는데, 현재 장전 연출 중(bIsReloadingAnimation == true)이라면 강제로 무시하고 끕니다.
+	bool bFinalState = bInEnable;
+	if (bIsReloadingAnimation && bInEnable)
 	{
-		GM->ShootTarget(ETargetType::Opponent);
+		bFinalState = false;
+	}
+
+	if (ShootDealer)
+	{
+		ShootDealer->SetIsEnabled(bFinalState);
+	}
+	if (ShootME)
+	{
+		ShootME->SetIsEnabled(bFinalState);
 	}
 }
 
-void UBattleUIWidget::OnShootSelfClicked()
+void UBattleUIWidget::RefreshItemSlots()
 {
-	ABuckshotGameMode* GM = Cast<ABuckshotGameMode>(UGameplayStatics::GetGameMode(this));
-	if (GM && GM->IsPlayerTurn)
+	BP_RefreshItemSlots();
+}
+
+// ★ 사격 시: 쏜 탄창 UI 청소 및 처리
+void UBattleUIWidget::OnShotFiredHandler(EBulletType ShellType, ETargetType Target)
+{
+	
+}
+
+// ★ 재장전 시: 버튼 비활성화 -> 0.2초 간격 탄 등장 -> 완료 후 버튼 활성화
+void UBattleUIWidget::OnShellsLoadedHandler(const TArray<EBulletType>& Magazine)
+{
+	ClearAllShellIcons();
+
+	// 1. 장전 플래그 ON 지정 후 버튼 즉시 비활성화
+	bIsReloadingAnimation = true;
+	SetButtonsEnabled(false);
+
+	PendingShellsToSpawn = Magazine;
+
+	if (GetWorld())
 	{
-		GM->ShootTarget(ETargetType::Self);
+		GetWorld()->GetTimerManager().SetTimer(
+			ShellSpawnTimerHandle,
+			this,
+			&UBattleUIWidget::SpawnNextShellIcon,
+			0.2f,
+			true
+		);
 	}
 }
 
 void UBattleUIWidget::SpawnNextShellIcon()
 {
-	if (!ShellContainer || !ShellIconClass) return;
-
-	// 모든 총알 생성이 끝났을 때 -> 2초 뒤 사라지도록 타이머 실행
-	if (!CachedMagazine.IsValidIndex(CurrentSpawnIndex))
+	if (PendingShellsToSpawn.Num() == 0)
 	{
-		GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
 
-		// ★ 2.0초 후 ClearAllShellIcons 호출
-		GetWorld()->GetTimerManager().SetTimer(
-			ShellClearTimerHandle,
-			this,
-			&UBattleUIWidget::ClearAllShellIcons,
-			2.0f, // 대기 시간 (2초)
-			false
-		);
+			// 2초 대기 타이머
+			GetWorld()->GetTimerManager().SetTimer(
+				ShellClearTimerHandle,
+				this,
+				&UBattleUIWidget::HideShellsAndEnableButtons,
+				2.0f,
+				false
+			);
+		}
 		return;
 	}
 
-	EBulletType ShellType = CachedMagazine[CurrentSpawnIndex];
-	UShellIcon* NewShell = CreateWidget<UShellIcon>(this, ShellIconClass);
-	if (NewShell)
-	{
-		bool bIsLive = (ShellType == EBulletType::Live);
-		NewShell->SetShellType(bIsLive);
+	EBulletType NextType = PendingShellsToSpawn[0];
+	PendingShellsToSpawn.RemoveAt(0);
 
-		UHorizontalBoxSlot* NewSlot = ShellContainer->AddChildToHorizontalBox(NewShell);
-		if (NewSlot)
+	if (ShellContainer && ShellIconClass)
+	{
+		UShellIcon* NewIcon = CreateWidget<UShellIcon>(this, ShellIconClass);
+		if (NewIcon)
 		{
-			// 간격 및 정렬 조절 (좌우 간격 8px)
-			NewSlot->SetPadding(FMargin(8.0f, 0.0f));
-			NewSlot->HorizontalAlignment = HAlign_Center;
-			NewSlot->VerticalAlignment = VAlign_Center;
+			NewIcon->SetShellType(NextType);
+
+			UHorizontalBoxSlot* NewSlot = ShellContainer->AddChildToHorizontalBox(NewIcon);
+			if (NewSlot)
+			{
+				NewSlot->SetPadding(FMargin(5.0f, 0.0f, 5.0f, 0.0f));
+			}
+
+			ActiveShellIcons.Add(NewIcon);
 		}
 	}
+}
 
-	CurrentSpawnIndex++;
+void UBattleUIWidget::HideShellsAndEnableButtons()
+{
+	ClearAllShellIcons();
+
+	// 2. 장전 플래그 OFF 전환 후 버튼 활성화
+	bIsReloadingAnimation = false;
+	SetButtonsEnabled(true);
 }
 
 void UBattleUIWidget::ClearAllShellIcons()
 {
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(ShellClearTimerHandle);
+	}
+
 	if (ShellContainer)
 	{
 		ShellContainer->ClearChildren();
 	}
-}
 
-// 매개변수 1개 수신
-void UBattleUIWidget::UpdateShells(const TArray<EBulletType>& Magazine)
-{
-	if (!ShellContainer || !ShellIconClass) return;
-
-	// 기존 아이콘 및 타이머 초기화
-	ShellContainer->ClearChildren();
-	GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
-	GetWorld()->GetTimerManager().ClearTimer(ShellClearTimerHandle);
-
-	CachedMagazine = Magazine;
-	CurrentSpawnIndex = 0;
-
-	if (CachedMagazine.Num() == 0) return;
-
-	// 0.2초 간격으로 총알 아이콘 순차 생성 시작
-	GetWorld()->GetTimerManager().SetTimer(
-		ShellSpawnTimerHandle,
-		this,
-		&UBattleUIWidget::SpawnNextShellIcon,
-		0.2f,
-		true
-	);
-}
-
-void UBattleUIWidget::OnShotFiredHandler(EBulletType ShellType, ETargetType Target)
-{
+	ActiveShellIcons.Empty();
+	PendingShellsToSpawn.Empty();
 }

@@ -1,6 +1,5 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-#include "BattleUIWidget.h"
 #include "BuckshotGameMode.h"
+#include "BattleUIWidget.h"
 #include "DealrAIController.h"
 #include "HPWidget.h"
 #include "Kismet/GameplayStatics.h"
@@ -8,7 +7,9 @@
 #include "Algo/RandomShuffle.h"
 #include "RoundTransitionWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
 
+// 생성자: 기본 상태값 및 인벤토리 크기 초기화
 ABuckshotGameMode::ABuckshotGameMode()
 {
 	IsPlayerTurn = false;
@@ -23,8 +24,13 @@ ABuckshotGameMode::ABuckshotGameMode()
 
 	HPWidgetInstance = nullptr;
 	RoundTransitionWidgetInstance = nullptr;
+	BattleUIWidgetInstance = nullptr;
+
+	PlayerInventory.Init(EItemType::None, 8);
+	DealerInventory.Init(EItemType::None, 8);
 }
 
+// 게임 시작: 카메라인스턴스 설정 및 각 UI 위젯 생성, 첫 라운드 시작
 void ABuckshotGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -36,6 +42,7 @@ void ABuckshotGameMode::BeginPlay()
 		PC->SetInputMode(FInputModeGameAndUI());
 	}
 
+	// 메인 카메라 액터 탐색
 	if (!MainCameraActor)
 	{
 		TArray<AActor*> FoundActors;
@@ -46,7 +53,7 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
-	// 플레이어에게 카메라 고정
+	// 카메라인스턴스 뷰 전환
 	if (PC && MainCameraActor)
 	{
 		PC->SetViewTargetWithBlend(MainCameraActor, 0.0f);
@@ -62,16 +69,13 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
-	// 라운드 전환 UI 생성 및 이벤트 바인딩
+	// 라운드 전환 연출 UI 생성
 	if (RoundTransitionWidgetClass && PC)
 	{
-		RoundTransitionWidgetInstance =
-			CreateWidget<URoundTransitionWidget>(PC, RoundTransitionWidgetClass);
-
+		RoundTransitionWidgetInstance = CreateWidget<URoundTransitionWidget>(PC, RoundTransitionWidgetClass);
 		if (RoundTransitionWidgetInstance)
 		{
 			RoundTransitionWidgetInstance->AddToViewport(10000);
-
 			RoundTransitionWidgetInstance->OnTransitionFinished.AddDynamic(
 				this,
 				&ABuckshotGameMode::OnReloadTransitionFinished
@@ -79,20 +83,29 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
-	// 배틀 UI 생성
+	// 배틀 메인 UI 생성 및 사격 버튼 이벤트 바인딩
 	if (BattleUIClass && PC)
 	{
-		UUserWidget* BattleUIInstance = CreateWidget<UBattleUIWidget>(PC, BattleUIClass);
-		if (BattleUIInstance)
+		BattleUIWidgetInstance = CreateWidget<UBattleUIWidget>(PC, BattleUIClass);
+		if (BattleUIWidgetInstance)
 		{
-			BattleUIInstance->AddToViewport();
+			BattleUIWidgetInstance->AddToViewport();
+
+			if (BattleUIWidgetInstance->ShootDealer)
+			{
+				BattleUIWidgetInstance->ShootDealer->OnClicked.AddDynamic(this, &ABuckshotGameMode::OnShootDealerClicked);
+			}
+			if (BattleUIWidgetInstance->ShootME)
+			{
+				BattleUIWidgetInstance->ShootME->OnClicked.AddDynamic(this, &ABuckshotGameMode::OnShootMeClicked);
+			}
 		}
 	}
 
-	// 1라운드 시작
 	StartNextRound();
 }
 
+// 체력 UI 갱신
 void ABuckshotGameMode::RefreshHPUI()
 {
 	if (HPWidgetInstance)
@@ -101,29 +114,23 @@ void ABuckshotGameMode::RefreshHPUI()
 	}
 }
 
+// 탄창이 비었을 때 재장전 연출 및 전환 처리
 void ABuckshotGameMode::HandleMagazineEmpty()
 {
-	if (bIsReloadTransitionPlaying)
+	if (bIsReloadTransitionPlaying || PlayerHP <= 0 || DealerHP <= 0)
 	{
 		return;
 	}
-
-	if (PlayerHP <= 0 || DealerHP <= 0)
-	{
-		return;
-	}
-
 
 	bIsReloadTransitionPlaying = true;
 
 	if (RoundTransitionWidgetInstance)
 	{
-		
 		GetWorldTimerManager().SetTimer(
 			ReloadTransitionFallbackHandle,
 			this,
 			&ABuckshotGameMode::OnReloadTransitionFinished,
-			1.5f, // 재장전 딜레이 (필요에 따라 조절)
+			1.5f,
 			false
 		);
 	}
@@ -133,13 +140,28 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 	}
 }
 
+// 인벤토리의 비어있는 첫 번째 슬롯에 아이템 추가
+void ABuckshotGameMode::AddItemToInventorySlot(EItemType Item, bool bIsPlayer)
+{
+	TArray<EItemType>& TargetInventory = bIsPlayer ? PlayerInventory : DealerInventory;
+
+	for (int32 i = 0; i < TargetInventory.Num(); ++i)
+	{
+		if (TargetInventory[i] == EItemType::None)
+		{
+			TargetInventory[i] = Item;
+			break;
+		}
+	}
+}
+
+// 라운드 전환 연출 UI 재생
 void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
 {
 	bIsReloadTransitionPlaying = true;
 
 	if (RoundTransitionWidgetInstance)
 	{
-		//라운드가 완전히 새로 시작할 때만
 		RoundTransitionWidgetInstance->PlayReloadTransition(FMath::Clamp(RoundToDisplay, 1, 3));
 
 		GetWorldTimerManager().SetTimer(
@@ -156,22 +178,29 @@ void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
 	}
 }
 
+// 재장전 연출 종료 처리: 탄창을 새로 채우고 턴 진행
 void ABuckshotGameMode::OnReloadTransitionFinished()
 {
 	GetWorldTimerManager().ClearTimer(ReloadTransitionFallbackHandle);
 	bIsReloadTransitionPlaying = false;
 
-	// ★ 라운드 UI 연출이 완전히 끝난 "지금" 탄창을 생성하고 UI에 쏩니다!
 	LoadMagazine(CurrentRound == 1 ? 4 : 8);
 
-	if (!IsPlayerTurn)
+	if (IsPlayerTurn)
 	{
-		// 딜러 턴인 경우 딜러 행동 시작
+		if (BattleUIWidgetInstance)
+		{
+			BattleUIWidgetInstance->SetButtonsEnabled(true);
+		}
+	}
+	else
+	{
 		FTimerHandle DealerTurnTimer;
 		GetWorldTimerManager().SetTimer(DealerTurnTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
 	}
 }
 
+// 무작위로 실탄과 공포탄을 구성하여 탄창에 장전
 void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 {
 	Magazine.Empty();
@@ -180,29 +209,32 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 	int32 LiveCount = FMath::RandRange(1, TotalShells - 1);
 	int32 BlankCount = TotalShells - LiveCount;
 
-	// 1. 실탄과 공포탄을 순서대로 생성
-	for (int32 i = 0; i < LiveCount; ++i) Magazine.Add(EBulletType::Live);
-	for (int32 i = 0; i < BlankCount; ++i) Magazine.Add(EBulletType::Blank);
+	for (int32 i = 0; i < LiveCount; ++i)
+	{
+		Magazine.Add(EBulletType::Live);
+	}
+	for (int32 i = 0; i < BlankCount; ++i)
+	{
+		Magazine.Add(EBulletType::Blank);
+	}
 
-	// 2. UI 표시 전용 배열을 복사하여 전달 (정렬된 상태 또는 보여주기용)
 	TArray<EBulletType> DisplayMagazine = Magazine;
 
 	if (OnShellsLoaded.IsBound())
 	{
-		// UI에는 섞이지 않은 보여주기용 배열을 보냄
 		OnShellsLoaded.Broadcast(DisplayMagazine);
 	}
 
-	// 3. 실제 총안에 들어갈 탄창 배열만 무작위 셔플
 	Algo::RandomShuffle(Magazine);
 
 	if (GEngine)
 	{
-		FString ReloadMsg = FString::Printf(TEXT("[재장전 완료] 총 %d발 (실탄: %d, 공탄: %d)"), TotalShells, LiveCount, BlankCount);
+		FString ReloadMsg = FString::Printf(TEXT("[재장전 완료] 총 %d발 (실탄: %d, 공포탄: %d)"), TotalShells, LiveCount, BlankCount);
 		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Emerald, ReloadMsg);
 	}
 }
 
+// 딜러 AI 컨트롤러를 찾아 AI 턴 진행 명령 전달
 void ABuckshotGameMode::TriggerDealerTurn()
 {
 	TArray<AActor*> FoundPawns;
@@ -227,6 +259,7 @@ void ABuckshotGameMode::TriggerDealerTurn()
 	}
 }
 
+// 플레이어 및 딜러에게 랜덤 아이템 지급
 void ABuckshotGameMode::DistributeItems(int32 ItemCount)
 {
 	const TArray<EItemType> AvailableItems = {
@@ -238,17 +271,18 @@ void ABuckshotGameMode::DistributeItems(int32 ItemCount)
 		EItemType::Phone
 	};
 
-	// 플레이어 아이템 지급 (최대 8개)
 	for (int32 i = 0; i < ItemCount; ++i)
 	{
-		if (PlayerInventory.Num() >= 8) break;
-
 		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
-		PlayerInventory.Add(AvailableItems[RandomIndex]);
+		AddItemToInventorySlot(AvailableItems[RandomIndex], true);
 	}
 
-	// 딜러 아이템 지급
 	DistributeItemsToDealer(ItemCount);
+
+	if (BattleUIWidgetInstance)
+	{
+		BattleUIWidgetInstance->RefreshItemSlots();
+	}
 
 	if (GEngine)
 	{
@@ -256,6 +290,7 @@ void ABuckshotGameMode::DistributeItems(int32 ItemCount)
 	}
 }
 
+// 딜러 전용 아이템 지급
 void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 {
 	const TArray<EItemType> AvailableItems = {
@@ -267,24 +302,120 @@ void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 		EItemType::Phone
 	};
 
-	// 딜러 아이템 지급 (인벤토리 최대 8개 제한)
 	for (int32 i = 0; i < ItemCount; ++i)
 	{
-		if (DealerInventory.Num() >= 8) break;
-
 		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
-		DealerInventory.Add(AvailableItems[RandomIndex]);
+		AddItemToInventorySlot(AvailableItems[RandomIndex], false);
 	}
 }
 
+// 슬롯 번호에 해당하는 아이템 사용 및 효과 적용
+void ABuckshotGameMode::UseItemAtSlot(int32 SlotIndex, bool bIsPlayer)
+{
+	TArray<EItemType>& TargetInventory = bIsPlayer ? PlayerInventory : DealerInventory;
+
+	if (!TargetInventory.IsValidIndex(SlotIndex))
+	{
+		return;
+	}
+
+	EItemType UsedItem = TargetInventory[SlotIndex];
+	if (UsedItem == EItemType::None)
+	{
+		return;
+	}
+
+	bool bSuccess = false;
+
+	switch (UsedItem)
+	{
+	case EItemType::Beer:
+		EjectCurrentShell();
+		bSuccess = true;
+		break;
+
+	case EItemType::Cigarette:
+		bSuccess = UseCigarette();
+		break;
+
+	case EItemType::Saw:
+		UseSaw();
+		bSuccess = true;
+		break;
+
+	case EItemType::Handcuffs:
+		bSuccess = UseHandcuffs();
+		break;
+
+	case EItemType::Magnifier:
+		PeekNextShell();
+		bSuccess = true;
+		break;
+
+	case EItemType::Phone:
+		int32 DummyIdx;
+		EBulletType DummyType;
+		bSuccess = UsePhone(DummyIdx, DummyType);
+		break;
+
+	default:
+		break;
+	}
+
+	if (bSuccess)
+	{
+		TargetInventory[SlotIndex] = EItemType::None;
+
+		if (BattleUIWidgetInstance)
+		{
+			BattleUIWidgetInstance->RefreshItemSlots();
+		}
+	}
+}
+
+// 아이템 종류에 따른 텍스처 리소스 반환
+UTexture2D* ABuckshotGameMode::GetItemTexture(EItemType ItemType) const
+{
+	switch (ItemType)
+	{
+	case EItemType::Saw:       return SawTexture;
+	case EItemType::Phone:     return PhoneTexture;
+	case EItemType::Magnifier: return MagnifierTexture;
+	case EItemType::Beer:      return BeerTexture;
+	case EItemType::Cigarette: return CigaretteTexture;
+	case EItemType::Handcuffs: return HandcuffsTexture;
+	default:                   return nullptr;
+	}
+}
+
+// 인벤토리 내 특정 아이템 개수 반환
+int32 ABuckshotGameMode::GetItemCountInInventory(EItemType ItemType, bool bIsPlayer) const
+{
+	const TArray<EItemType>& TargetInventory = bIsPlayer ? PlayerInventory : DealerInventory;
+	int32 Count = 0;
+
+	for (EItemType Item : TargetInventory)
+	{
+		if (Item == ItemType)
+		{
+			Count++;
+		}
+	}
+	return Count;
+}
+
+// 사격 메인 로직: 데미지 계산, 사망 검사, 턴 전환 처리
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
-	if (bIsReloadTransitionPlaying)
+	if (bIsReloadTransitionPlaying || Magazine.Num() == 0)
 	{
 		return false;
 	}
 
-	if (Magazine.Num() == 0) return false;
+	if (BattleUIWidgetInstance)
+	{
+		BattleUIWidgetInstance->SetButtonsEnabled(false);
+	}
 
 	EBulletType CurrentShell = Magazine[0];
 	Magazine.RemoveAt(0);
@@ -303,7 +434,12 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		GEngine->AddOnScreenDebugMessage(-1, 3.5f, LogColor, ShotLog);
 	}
 
-	// 1. 데미지 적용
+	if (OnShotFired.IsBound())
+	{
+		OnShotFired.Broadcast(CurrentShell, Target);
+	}
+
+	// 실탄 피격 처리
 	if (CurrentShell == EBulletType::Live)
 	{
 		if ((IsPlayerTurn && Target == ETargetType::Opponent) || (!IsPlayerTurn && Target == ETargetType::Self))
@@ -317,32 +453,21 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 
 		RefreshHPUI();
 
-		// 사망 처리 (사망 시 즉시 종료)
+		// 사망 처리 시 타이머 등록 후 즉시 종료하여 추가 턴 전환 방지
 		if (PlayerHP <= 0)
 		{
-			if (CurrentRound < 3)
-			{
-				GetWorldTimerManager().SetTimer(RestartTimerHandle, this, &ABuckshotGameMode::ResetCurrentRound, 2.0f, false);
-			}
+			GetWorldTimerManager().SetTimer(RestartTimerHandle, this, &ABuckshotGameMode::ResetCurrentRound, 2.0f, false);
 			return true;
 		}
 
 		if (DealerHP <= 0)
 		{
-			if (CurrentRound < 3)
-			{
-				GetWorldTimerManager().SetTimer(RoundTimerHandle, this, &ABuckshotGameMode::StartNextRound, 2.0f, false);
-			}
+			GetWorldTimerManager().SetTimer(RoundTimerHandle, this, &ABuckshotGameMode::StartNextRound, 2.0f, false);
 			return true;
 		}
 	}
 
-	if (OnShotFired.IsBound())
-	{
-		OnShotFired.Broadcast(CurrentShell, Target);
-	}
-
-	// 2. 💡 [핵심] 이번 발사로 탄창이 비었을 경우: 턴을 바꾸지 않고 즉시 재장전 처리만 실행
+	// 탄창이 비었을 경우 재장전
 	if (Magazine.Num() == 0)
 	{
 		if (GEngine)
@@ -351,37 +476,41 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		}
 
 		HandleMagazineEmpty();
-		return true; // 턴 전환을 하지 않고 여기서 종료합니다.
+		return true;
 	}
 
-	// 3. 탄창이 남아있는 경우에만 정상적인 턴 전환 진행
+	// 후속 턴 결정
 	if (CurrentShell == EBulletType::Live)
 	{
 		SwitchTurn();
 	}
-	else // 공포탄인 경우
+	else
 	{
 		if (Target == ETargetType::Opponent)
 		{
 			SwitchTurn();
 		}
-		else if (!IsPlayerTurn)
+		else
 		{
-			// 딜러가 자신에게 공포탄을 쏜 경우: 1초 뒤 연속 턴 진행
-			FTimerHandle DealerContinueTimer;
-			GetWorldTimerManager().SetTimer(DealerContinueTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
+			if (IsPlayerTurn)
+			{
+				if (BattleUIWidgetInstance)
+				{
+					BattleUIWidgetInstance->SetButtonsEnabled(true);
+				}
+			}
+			else
+			{
+				FTimerHandle DealerContinueTimer;
+				GetWorldTimerManager().SetTimer(DealerContinueTimer, this, &ABuckshotGameMode::TriggerDealerTurn, 1.0f, false);
+			}
 		}
-	}
-
-	// 탄환 소진 브로드캐스트 (남은 탄 수 전달)
-	if (OnShotFired.IsBound())
-	{
-		OnShotFired.Broadcast(CurrentShell, Target);
 	}
 
 	return true;
 }
 
+// 다음 라운드 시작 설정 및 초기화
 void ABuckshotGameMode::StartNextRound()
 {
 	GetWorldTimerManager().ClearTimer(RoundTimerHandle);
@@ -392,10 +521,6 @@ void ABuckshotGameMode::StartNextRound()
 
 	if (CurrentRound > 3)
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("모든 라운드 클리어!"));
-		}
 		return;
 	}
 
@@ -406,47 +531,28 @@ void ABuckshotGameMode::StartNextRound()
 	IsSawOff = false;
 	IsCuff = false;
 
+	PlayerInventory.Init(EItemType::None, 8);
+	DealerInventory.Init(EItemType::None, 8);
+
 	RefreshHPUI();
 
-	// 라운드별 아이템 지급
 	int32 ItemsToGive = (CurrentRound == 2) ? 2 : ((CurrentRound == 3) ? 4 : 0);
 	if (ItemsToGive > 0)
 	{
 		DistributeItems(ItemsToGive);
 	}
 
-	if (GEngine)
+	if (CurrentRound == 1)
 	{
-		FString RoundMsg = FString::Printf(TEXT("=== ROUND %d START ==="), CurrentRound);
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Cyan, RoundMsg);
+		OnReloadTransitionFinished();
 	}
-
-	PlayRoundTransitionUI(CurrentRound);
+	else
+	{
+		PlayRoundTransitionUI(CurrentRound);
+	}
 }
 
-void ABuckshotGameMode::ResetCurrentRound()
-{
-	//잔여 타이머 클리어
-	GetWorldTimerManager().ClearTimer(RoundTimerHandle);
-	GetWorldTimerManager().ClearTimer(RestartTimerHandle);
-	GetWorldTimerManager().ClearTimer(ReloadTransitionFallbackHandle);
-
-	MaxHP = CurrentRound * 2;
-	PlayerHP = MaxHP;
-	DealerHP = MaxHP;
-	IsPlayerTurn = true;
-	IsSawOff = false;
-	IsCuff = false;
-
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 4.f, FColor::Orange, FString::Printf(TEXT("Round %d 에서 사망하셨습니다. HP(%d) 원상복구 후 재시작!"), CurrentRound, MaxHP));
-	}
-
-	LoadMagazine(CurrentRound == 1 ? 4 : 8);
-	RefreshHPUI();
-}
-
+// 턴 교대 로직 (수갑 효과 반영)
 void ABuckshotGameMode::SwitchTurn()
 {
 	if (IsCuff)
@@ -468,6 +574,11 @@ void ABuckshotGameMode::SwitchTurn()
 		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Blue, TurnStr);
 	}
 
+	if (BattleUIWidgetInstance)
+	{
+		BattleUIWidgetInstance->SetButtonsEnabled(IsPlayerTurn);
+	}
+
 	if (!IsPlayerTurn)
 	{
 		FTimerHandle DealerTurnTimer;
@@ -475,6 +586,35 @@ void ABuckshotGameMode::SwitchTurn()
 	}
 }
 
+// 플레이어 패배 시 해당 라운드 재시작
+void ABuckshotGameMode::ResetCurrentRound()
+{
+	GetWorldTimerManager().ClearTimer(RestartTimerHandle);
+
+	Magazine.Empty();
+	IsPlayerTurn = true;
+	IsSawOff = false;
+	IsCuff = false;
+
+	MaxHP = CurrentRound * 2;
+	PlayerHP = MaxHP;
+	DealerHP = MaxHP;
+
+	PlayerInventory.Init(EItemType::None, 8);
+	DealerInventory.Init(EItemType::None, 8);
+
+	RefreshHPUI();
+
+	int32 ItemsToGive = (CurrentRound == 2) ? 2 : ((CurrentRound == 3) ? 4 : 0);
+	if (ItemsToGive > 0)
+	{
+		DistributeItems(ItemsToGive);
+	}
+
+	PlayRoundTransitionUI(CurrentRound);
+}
+
+// 돋보기: 현재 탄창의 첫 번째 총알 확인
 EBulletType ABuckshotGameMode::PeekNextShell()
 {
 	if (Magazine.Num() > 0)
@@ -484,6 +624,7 @@ EBulletType ABuckshotGameMode::PeekNextShell()
 	return EBulletType::Blank;
 }
 
+// 맥주: 현재 총알 배출 및 UI 삭제 델리게이트 호출
 EBulletType ABuckshotGameMode::EjectCurrentShell()
 {
 	if (bIsReloadTransitionPlaying)
@@ -495,6 +636,12 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 	{
 		EBulletType Ejected = Magazine[0];
 		Magazine.RemoveAt(0);
+
+		// 맥주 사용 시 UI 탄약 아이콘 삭제용 브로드캐스트
+		if (OnShotFired.IsBound())
+		{
+			OnShotFired.Broadcast(Ejected, ETargetType::Self);
+		}
 
 		if (GEngine)
 		{
@@ -511,6 +658,7 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 	return EBulletType::Blank;
 }
 
+// 담배: HP 1 회복
 bool ABuckshotGameMode::UseCigarette()
 {
 	FString UserStr = IsPlayerTurn ? TEXT("플레이어") : TEXT("딜러");
@@ -529,6 +677,7 @@ bool ABuckshotGameMode::UseCigarette()
 	return false;
 }
 
+// 톱: 데미지 2배 설정
 void ABuckshotGameMode::UseSaw()
 {
 	IsSawOff = true;
@@ -539,6 +688,7 @@ void ABuckshotGameMode::UseSaw()
 	}
 }
 
+// 수갑: 상대방 턴 1회 스킵 설정
 bool ABuckshotGameMode::UseHandcuffs()
 {
 	if (!IsCuff)
@@ -554,9 +704,13 @@ bool ABuckshotGameMode::UseHandcuffs()
 	return false;
 }
 
+// 휴대폰: 랜덤한 위치의 총알 정보 확인
 bool ABuckshotGameMode::UsePhone(int32& OutIndex, EBulletType& OutType)
 {
-	if (Magazine.Num() <= 1) return false;
+	if (Magazine.Num() <= 1)
+	{
+		return false;
+	}
 
 	OutIndex = FMath::RandRange(1, Magazine.Num() - 1);
 	OutType = Magazine[OutIndex];
@@ -568,4 +722,22 @@ bool ABuckshotGameMode::UsePhone(int32& OutIndex, EBulletType& OutType)
 	}
 
 	return true;
+}
+
+// UI 클릭 이벤트 핸들러: 딜러 사격
+void ABuckshotGameMode::OnShootDealerClicked()
+{
+	if (IsPlayerTurn)
+	{
+		ShootTarget(ETargetType::Opponent);
+	}
+}
+
+// UI 클릭 이벤트 핸들러: 자신 사격
+void ABuckshotGameMode::OnShootMeClicked()
+{
+	if (IsPlayerTurn)
+	{
+		ShootTarget(ETargetType::Self);
+	}
 }

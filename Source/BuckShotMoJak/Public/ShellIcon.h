@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "BuckshotGameMode.h" // EBulletType Enum 사용을 위해 포함
 #include "ShellIcon.generated.h"
 
 class UImage;
@@ -13,7 +14,7 @@ UCLASS()
 class BUCKSHOTMOJAK_API UShellIcon : public UUserWidget
 {
 	GENERATED_BODY()
-	
+
 protected:
 	virtual void NativeConstruct() override;
 
@@ -32,7 +33,7 @@ public:
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
 	UWidgetAnimation* Anim_PopUp;
 
-	// 탄종 설정 및 이미지 교체 함수
+	// 탄종 설정 및 이미지 교체 함수 (EBulletType으로 변경)
 	UFUNCTION(BlueprintCallable, Category = "Shell")
-	void SetShellType(bool bIsLive);
+	void SetShellType(EBulletType ShellType);
 };
