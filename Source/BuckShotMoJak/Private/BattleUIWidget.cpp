@@ -1,72 +1,189 @@
 #include "BattleUIWidget.h"
+
 #include "BuckshotGameMode.h"
 #include "ShellIcon.h"
+#include "ItemSlotWidget.h"
+
 #include "Components/Button.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+
 #include "Kismet/GameplayStatics.h"
+
+
+// ==================================================
+// NativeConstruct
+// ==================================================
 
 void UBattleUIWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	ABuckshotGameMode* GM = Cast<ABuckshotGameMode>(UGameplayStatics::GetGameMode(this));
-	if (GM)
-	{
-		GM->OnShotFired.RemoveDynamic(this, &UBattleUIWidget::OnShotFiredHandler);
-		GM->OnShotFired.AddDynamic(this, &UBattleUIWidget::OnShotFiredHandler);
+	ABuckshotGameMode* GM =
+		Cast<ABuckshotGameMode>(
+			UGameplayStatics::GetGameMode(this)
+		);
 
-		GM->OnShellsLoaded.RemoveDynamic(this, &UBattleUIWidget::OnShellsLoadedHandler);
-		GM->OnShellsLoaded.AddDynamic(this, &UBattleUIWidget::OnShellsLoadedHandler);
+	if (!GM)
+	{
+		return;
 	}
+
+	// 아이템 슬롯 6개 생성
+	CreateItemSlots();
+
+	// 사격 이벤트 연결
+	GM->OnShotFired.AddDynamic(
+		this,
+		&UBattleUIWidget::OnShotFiredHandler
+	);
+
+	// 장전 이벤트 연결
+	GM->OnShellsLoaded.AddDynamic(
+		this,
+		&UBattleUIWidget::OnShellsLoadedHandler
+	);
+
+	RefreshItemSlots();
 }
+
+
+// ==================================================
+// NativeDestruct
+// ==================================================
 
 void UBattleUIWidget::NativeDestruct()
 {
 	ClearAllShellIcons();
+
+	ItemSlots.Empty();
+
 	Super::NativeDestruct();
 }
 
+
+// ==================================================
+// 버튼 활성화 / 비활성화
+// ==================================================
+
 void UBattleUIWidget::SetButtonsEnabled(bool bInEnable)
 {
-	// 만약 켜려고(true) 하는데, 현재 장전 연출 중(bIsReloadingAnimation == true)이라면 강제로 무시하고 끕니다.
 	bool bFinalState = bInEnable;
+
+
+	// 재장전 연출 중이면 무조건 비활성화
 	if (bIsReloadingAnimation && bInEnable)
 	{
 		bFinalState = false;
 	}
 
+
 	if (ShootDealer)
 	{
-		ShootDealer->SetIsEnabled(bFinalState);
+		ShootDealer->SetIsEnabled(
+			bFinalState
+		);
 	}
+
+
 	if (ShootME)
 	{
-		ShootME->SetIsEnabled(bFinalState);
+		ShootME->SetIsEnabled(
+			bFinalState
+		);
 	}
 }
+
+
+// ==================================================
+// 아이템 슬롯 갱신
+// ==================================================
 
 void UBattleUIWidget::RefreshItemSlots()
 {
-	BP_RefreshItemSlots();
+	ABuckshotGameMode* GM =
+		Cast<ABuckshotGameMode>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!GM)
+	{
+		return;
+	}
+
+	if (ItemSlots.Num() != 6)
+	{
+		CreateItemSlots();
+	}
+
+	for (int32 i = 0; i < ItemSlots.Num(); ++i)
+	{
+		UItemSlotWidget* SlotWidget = ItemSlots[i];
+
+		if (!SlotWidget)
+		{
+			continue;
+		}
+
+		const FItemSlot ItemSlot =
+			GM->GetPlayerItemSlot(i);
+
+		const EItemType ItemType =
+			ItemSlot.ItemType;
+
+		const int32 Quantity =
+			ItemSlot.Quantity;
+
+		UTexture2D* ItemTexture =
+			GM->GetItemTexture(ItemType);
+
+		SlotWidget->SetSlotData(
+			ItemType,
+			ItemTexture,
+			Quantity,
+			i,
+			true
+		);
+
+		SlotWidget->SetSlotEnabled(
+			GM->IsPlayerTurn && Quantity > 0
+		);
+	}
 }
 
-// ★ 사격 시: 쏜 탄창 UI 청소 및 처리
-void UBattleUIWidget::OnShotFiredHandler(EBulletType ShellType, ETargetType Target)
+
+// ==================================================
+// 사격 이벤트
+// ==================================================
+
+void UBattleUIWidget::OnShotFiredHandler(
+	EBulletType ShellType,
+	ETargetType Target
+)
 {
-	
+	// 현재는 별도의 처리 없음
 }
 
-// ★ 재장전 시: 버튼 비활성화 -> 0.2초 간격 탄 등장 -> 완료 후 버튼 활성화
-void UBattleUIWidget::OnShellsLoadedHandler(const TArray<EBulletType>& Magazine)
+
+// ==================================================
+// 장전 이벤트
+// ==================================================
+
+void UBattleUIWidget::OnShellsLoadedHandler(
+	const TArray<EBulletType>& Magazine
+)
 {
 	ClearAllShellIcons();
 
-	// 1. 장전 플래그 ON 지정 후 버튼 즉시 비활성화
+
+	// 장전 연출 시작
 	bIsReloadingAnimation = true;
+
 	SetButtonsEnabled(false);
 
+
 	PendingShellsToSpawn = Magazine;
+
 
 	if (GetWorld())
 	{
@@ -80,15 +197,23 @@ void UBattleUIWidget::OnShellsLoadedHandler(const TArray<EBulletType>& Magazine)
 	}
 }
 
+
+// ==================================================
+// 탄 하나 생성
+// ==================================================
+
 void UBattleUIWidget::SpawnNextShellIcon()
 {
 	if (PendingShellsToSpawn.Num() == 0)
 	{
 		if (GetWorld())
 		{
-			GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
+			GetWorld()->GetTimerManager().ClearTimer(
+				ShellSpawnTimerHandle
+			);
 
-			// 2초 대기 타이머
+
+			// 탄을 전부 보여준 뒤 2초 대기
 			GetWorld()->GetTimerManager().SetTimer(
 				ShellClearTimerHandle,
 				this,
@@ -97,52 +222,190 @@ void UBattleUIWidget::SpawnNextShellIcon()
 				false
 			);
 		}
+
 		return;
 	}
 
-	EBulletType NextType = PendingShellsToSpawn[0];
+
+	// 다음 탄
+	EBulletType NextType =
+		PendingShellsToSpawn[0];
+
+
 	PendingShellsToSpawn.RemoveAt(0);
+
 
 	if (ShellContainer && ShellIconClass)
 	{
-		UShellIcon* NewIcon = CreateWidget<UShellIcon>(this, ShellIconClass);
+		UShellIcon* NewIcon =
+			CreateWidget<UShellIcon>(
+				this,
+				ShellIconClass
+			);
+
+
 		if (NewIcon)
 		{
-			NewIcon->SetShellType(NextType);
+			NewIcon->SetShellType(
+				NextType
+			);
 
-			UHorizontalBoxSlot* NewSlot = ShellContainer->AddChildToHorizontalBox(NewIcon);
+
+			UHorizontalBoxSlot* NewSlot =
+				ShellContainer->AddChildToHorizontalBox(
+					NewIcon
+				);
+
+
 			if (NewSlot)
 			{
-				NewSlot->SetPadding(FMargin(5.0f, 0.0f, 5.0f, 0.0f));
+				NewSlot->SetPadding(
+					FMargin(
+						5.0f,
+						0.0f,
+						5.0f,
+						0.0f
+					)
+				);
 			}
 
-			ActiveShellIcons.Add(NewIcon);
+
+			ActiveShellIcons.Add(
+				NewIcon
+			);
 		}
 	}
 }
+
+
+// ==================================================
+// 탄 숨기기 + 버튼 활성화
+// ==================================================
 
 void UBattleUIWidget::HideShellsAndEnableButtons()
 {
 	ClearAllShellIcons();
 
-	// 2. 장전 플래그 OFF 전환 후 버튼 활성화
+
 	bIsReloadingAnimation = false;
+
+
 	SetButtonsEnabled(true);
 }
+
+void UBattleUIWidget::CreateItemSlots()
+{
+	if (!ItemContainer)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[BattleUI] ItemContainer가 없습니다.")
+		);
+		return;
+	}
+
+	if (!ItemSlotClass)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[BattleUI] ItemSlotClass가 설정되지 않았습니다.")
+		);
+		return;
+	}
+
+	ABuckshotGameMode* GM =
+		Cast<ABuckshotGameMode>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!GM)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[BattleUI] BuckshotGameMode를 찾을 수 없습니다.")
+		);
+		return;
+	}
+
+	// 기존 UI 슬롯 삭제
+	ItemContainer->ClearChildren();
+	ItemSlots.Empty();
+
+	// 인벤토리는 항상 6칸
+	constexpr int32 InventorySlotCount = 6;
+
+	for (int32 i = 0; i < InventorySlotCount; ++i)
+	{
+		UItemSlotWidget* SlotWidget =
+			CreateWidget<UItemSlotWidget>(
+				GetOwningPlayer(),
+				ItemSlotClass
+			);
+
+		if (!SlotWidget)
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[BattleUI] 슬롯 생성 실패 / Index=%d"),
+				i
+			);
+			continue;
+		}
+
+		const FItemSlot ItemSlot =
+			GM->GetPlayerItemSlot(i);
+
+		SlotWidget->SetSlotData(
+			ItemSlot.ItemType,
+			GM->GetItemTexture(ItemSlot.ItemType),
+			ItemSlot.Quantity,
+			i,
+			true
+		);
+
+		ItemSlots.Add(SlotWidget);
+
+		ItemContainer->AddChild(SlotWidget);
+	}
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[BattleUI] CreateItemSlots 완료 / 슬롯 수=%d"),
+		ItemSlots.Num()
+	);
+}
+
+
+// ==================================================
+// 탄 아이콘 전체 삭제
+// ==================================================
 
 void UBattleUIWidget::ClearAllShellIcons()
 {
 	if (GetWorld())
 	{
-		GetWorld()->GetTimerManager().ClearTimer(ShellSpawnTimerHandle);
-		GetWorld()->GetTimerManager().ClearTimer(ShellClearTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(
+			ShellSpawnTimerHandle
+		);
+
+		GetWorld()->GetTimerManager().ClearTimer(
+			ShellClearTimerHandle
+		);
 	}
+
 
 	if (ShellContainer)
 	{
 		ShellContainer->ClearChildren();
 	}
 
+
 	ActiveShellIcons.Empty();
+
 	PendingShellsToSpawn.Empty();
 }

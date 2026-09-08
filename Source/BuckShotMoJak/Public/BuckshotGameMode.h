@@ -1,14 +1,17 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "BuckshotGameMode.generated.h"
 
+
 // ============================================================
 // Forward Declaration
 // ============================================================
+
+class UHPWidget;
+class URoundTransitionWidget;
+class UBattleUIWidget;
 
 
 // ============================================================
@@ -45,6 +48,42 @@ enum class ETargetType : uint8
 
 
 // ============================================================
+// Item Slot
+// ============================================================
+//
+// 슬롯 하나가
+//
+// [Beer x2]
+// [Saw x1]
+// [None]
+// ...
+//
+// 이런 식으로 아이템 종류와 개수를 같이 가지고 있음.
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct FItemSlot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EItemType ItemType = EItemType::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Quantity = 0;
+
+	// 빈 슬롯 생성용
+	static FItemSlot None()
+	{
+		FItemSlot Slot;
+		Slot.ItemType = EItemType::None;
+		Slot.Quantity = 0;
+		return Slot;
+	}
+};
+
+
+// ============================================================
 // Delegate
 // ============================================================
 
@@ -63,10 +102,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	Target
 );
 
-class UHPWidget;
-class URoundTransitionWidget;
-class UBattleUIWidget;
-
 
 // ============================================================
 // GameMode
@@ -80,7 +115,6 @@ class BUCKSHOTMOJAK_API ABuckshotGameMode : public AGameModeBase
 public:
 
 	ABuckshotGameMode();
-
 
 protected:
 
@@ -108,6 +142,29 @@ protected:
 
 
 public:
+
+	// ========================================================
+	// Inventory
+	// ========================================================
+
+	// 플레이어 인벤토리
+	//
+	// 예:
+	// [Beer x2]
+	// [Saw x1]
+	// [None]
+	// [None]
+	// [None]
+	// [None]
+	//
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|Inventory")
+	TArray<FItemSlot> PlayerInventory;
+
+
+	// 딜러 인벤토리
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|Inventory")
+	TArray<FItemSlot> DealerInventory;
+
 
 	// ========================================================
 	// Camera
@@ -161,17 +218,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|State")
 	int32 MaxHP;
-
-
-	// ========================================================
-	// Inventory
-	// ========================================================
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|Inventory")
-	TArray<EItemType> PlayerInventory;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|Inventory")
-	TArray<EItemType> DealerInventory;
 
 
 	// ========================================================
@@ -258,19 +304,37 @@ public:
 	void DistributeItems(int32 ItemCount);
 
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
-	void UseItemAtSlot(int32 SlotIndex, bool bIsPlayer);
+	bool UseItemAtSlot(int32 SlotIndex, bool bIsPlayer);
+
+	UFUNCTION(BlueprintCallable)
+	bool UseItemByType(EItemType ItemType, bool bIsPlayer);
+
+	// ========================================================
+	// Inventory Initialization
+	// ========================================================
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Inventory")
+	void InitializePlayerInventory();
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Inventory")
+	void InitializeDealerInventory();
 
 
 	// ========================================================
 	// Getter
 	// ========================================================
 
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
 	UTexture2D* GetItemTexture(EItemType ItemType) const;
 
-	int32 GetItemCountInInventory(
-		EItemType ItemType,
-		bool bIsPlayer
-	) const;
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
+	int32 GetItemCountInInventory(EItemType ItemType, bool bIsPlayer) const;
+
+	UFUNCTION(BlueprintPure, Category = "BuckShot|Inventory")
+	FItemSlot GetPlayerItemSlot(int32 SlotIndex) const;
+
+	UFUNCTION(BlueprintPure, Category = "BuckShot|Inventory")
+	FItemSlot GetDealerItemSlot(int32 SlotIndex) const;
 
 	int32 GetDealerHP() const
 	{
@@ -310,10 +374,7 @@ private:
 
 	void HandleMagazineEmpty();
 
-	void AddItemToInventorySlot(
-		EItemType Item,
-		bool bIsPlayer
-	);
+	void AddItemToInventorySlot(EItemType Item, bool bIsPlayer);
 
 
 	// ========================================================
