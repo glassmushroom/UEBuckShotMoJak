@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "EndingWidget.h"
 #include "BuckshotGameMode.h"
+#include "EndingWidget.h"
 #include "BattleUIWidget.h"
 #include "DealrAIController.h"
 #include "HPWidget.h"
@@ -757,16 +757,6 @@ void ABuckshotGameMode::TriggerDealerTurn()
 // 사격
 // ======================================================
 
-bool ABuckshotGameMode::ShootTarget(
-	ETargetType Target
-)
-{
-	if (bIsReloadTransitionPlaying ||
-		Magazine.Num() == 0)
-	{
-		return false;
-	}
-
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
 
@@ -904,59 +894,43 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 
 			return true;
 		}
-
-	if (Magazine.Num() == 0)
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				3.f,
-				FColor::Yellow,
-				TEXT("탄창이 완전히 비었습니다. 재장전을 진행합니다.")
-			);
 		}
 
-		HandleMagazineEmpty();
+		if (Magazine.Num() == 0)
+		{
+			HandleMagazineEmpty();
+			return true;
+		}
 
-		return true;
-	}
+		const bool bShouldSwitchTurn =
+			CurrentShell == EBulletType::Live ||
+			Target == ETargetType::Opponent;
 
-	if (CurrentShell == EBulletType::Live)
-	{
-		SwitchTurn();
-	}
-	else
-	{
-		if (Target == ETargetType::Opponent)
+		if (bShouldSwitchTurn)
 		{
 			SwitchTurn();
 		}
-		else
+		else if (IsPlayerTurn)
 		{
-			if (IsPlayerTurn)
+			if (BattleUIWidgetInstance)
 			{
-				if (BattleUIWidgetInstance)
-				{
-					BattleUIWidgetInstance->SetButtonsEnabled(true);
-				}
-			}
-			else
-			{
-				FTimerHandle DealerContinueTimer;
-
-				GetWorldTimerManager().SetTimer(
-					DealerContinueTimer,
-					this,
-					&ABuckshotGameMode::TriggerDealerTurn,
-					1.0f,
-					false
-				);
+				BattleUIWidgetInstance->SetButtonsEnabled(true);
 			}
 		}
-	}
+		else
+		{
+			FTimerHandle DealerContinueTimer;
 
-	return true;
+			GetWorldTimerManager().SetTimer(
+				DealerContinueTimer,
+				this,
+				&ABuckshotGameMode::TriggerDealerTurn,
+				1.0f,
+				false
+			);
+		}
+
+		return true;
 }
 
 // ======================================================
@@ -1004,11 +978,8 @@ void ABuckshotGameMode::StartNextRound()
 	// 새 라운드에서는 이전 라운드의 탄약을 전부 버림
 	Magazine.Empty();
 
-
-	RefreshHPUI();
-
 	// 라운드 시작 시 전환 UI 연출 실행
-	PlayRoundTransitionUI(CurrentRound);
+
 
 	InitializePlayerInventory();
 	InitializeDealerInventory();
