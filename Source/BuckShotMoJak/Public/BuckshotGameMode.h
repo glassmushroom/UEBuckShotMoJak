@@ -4,11 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "BuckshotGameMode.generated.h"
 
-
-// ============================================================
-// Forward Declaration
-// ============================================================
-
+class UEndingWidget;
 class UHPWidget;
 class URoundTransitionWidget;
 class UBattleUIWidget;
@@ -187,12 +183,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI")
 	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
+	UPROPERTY()
+	UEndingWidget* EndingWidgetInstance;
 
-	// ========================================================
-	// Game State
-	// ========================================================
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	TSubclassOf<UEndingWidget> EndingWidgetClass;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
+	// 게임 상태
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EBulletType> Magazine;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
@@ -207,6 +205,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	bool bIsReloadTransitionPlaying;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	bool bIsEndingPlaying;
+
+	// HP
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	int32 CurrentRound;
 
@@ -374,6 +377,8 @@ private:
 
 	void HandleMagazineEmpty();
 
+	void PlayVictoryEnding();
+	void PlayDefeatEnding();
 	void AddItemToInventorySlot(EItemType Item, bool bIsPlayer);
 
 

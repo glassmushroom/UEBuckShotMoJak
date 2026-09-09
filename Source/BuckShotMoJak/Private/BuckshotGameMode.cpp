@@ -1,3 +1,6 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#include "EndingWidget.h"
 #include "BuckshotGameMode.h"
 #include "BattleUIWidget.h"
 #include "DealrAIController.h"
@@ -34,6 +37,7 @@ ABuckshotGameMode::ABuckshotGameMode()
 	IsSawOff = false;
 	IsCuff = false;
 	bIsReloadTransitionPlaying = false;
+	bIsEndingPlaying = false;
 
 	CurrentRound = 0;
 	PlayerHP = 0;
@@ -42,18 +46,7 @@ ABuckshotGameMode::ABuckshotGameMode()
 
 	HPWidgetInstance = nullptr;
 	RoundTransitionWidgetInstance = nullptr;
-	BattleUIWidgetInstance = nullptr;
-
-	// --------------------------------------------------
-	// 인벤토리는 항상 6칸 고정
-	// 아이템 종류도 슬롯 위치에 따라 고정
-	// --------------------------------------------------
-
-	PlayerInventory.SetNum(6);
-	DealerInventory.SetNum(6);
-
-	InitializePlayerInventory();
-	InitializeDealerInventory();
+	EndingWidgetInstance = nullptr;
 }
 
 void ABuckshotGameMode::BeginPlay()
@@ -133,10 +126,17 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
-	// --------------------------------------------------
-	// Battle UI
-	// --------------------------------------------------
+	if (EndingWidgetClass && PC)
+	{
+		EndingWidgetInstance = CreateWidget<UEndingWidget>(PC, EndingWidgetClass);
 
+		if (EndingWidgetInstance)
+		{
+			EndingWidgetInstance->AddToViewport(11000);
+		}
+	}
+
+	// 배틀 UI 생성
 	if (BattleUIClass && PC)
 	{
 		BattleUIWidgetInstance =
@@ -553,13 +553,47 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 	}
 }
 
-// ======================================================
-// 라운드 전환 UI
-// ======================================================
+void ABuckshotGameMode::PlayVictoryEnding()
+{
+	if (bIsEndingPlaying)
+	{
+		return;
+	}
 
-void ABuckshotGameMode::PlayRoundTransitionUI(
-	int32 RoundToDisplay
-)
+	bIsEndingPlaying = true;
+
+	if (EndingWidgetInstance)
+	{
+		EndingWidgetInstance->PlayVictoryEnding();
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("VICTORY"));
+	}
+}
+
+void ABuckshotGameMode::PlayDefeatEnding()
+{
+	if (bIsEndingPlaying)
+	{
+		return;
+	}
+
+	bIsEndingPlaying = true;
+
+	if (EndingWidgetInstance)
+	{
+		EndingWidgetInstance->PlayDefeatEnding();
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("GAME OVER"));
+	}
+}
+
+void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
 {
 	bIsReloadTransitionPlaying = true;
 
@@ -573,7 +607,7 @@ void ABuckshotGameMode::PlayRoundTransitionUI(
 			ReloadTransitionFallbackHandle,
 			this,
 			&ABuckshotGameMode::OnReloadTransitionFinished,
-			2.5f,
+			5.0f,
 			false
 		);
 	}
@@ -733,10 +767,22 @@ bool ABuckshotGameMode::ShootTarget(
 		return false;
 	}
 
-	if (BattleUIWidgetInstance)
+bool ABuckshotGameMode::ShootTarget(ETargetType Target)
+{
+
+	if (bIsEndingPlaying)
+	{
+		return false;
+	}
+
+	if (bIsReloadTransitionPlaying)
 	{
 		BattleUIWidgetInstance->SetButtonsEnabled(false);
 	}
+
+	if (bIsEndingPlaying) return false;
+
+	if (Magazine.Num() == 0) return false;
 
 	EBulletType CurrentShell = Magazine[0];
 
@@ -821,30 +867,43 @@ bool ABuckshotGameMode::ShootTarget(
 
 		if (PlayerHP <= 0)
 		{
-			GetWorldTimerManager().SetTimer(
-				RestartTimerHandle,
-				this,
-				&ABuckshotGameMode::ResetCurrentRound,
-				2.0f,
-				false
-			);
+			if (CurrentRound == 3)
+			{
+				PlayDefeatEnding();
+			}
+			else
+			{
+				GetWorldTimerManager().SetTimer(
+					RestartTimerHandle,
+					this,
+					&ABuckshotGameMode::ResetCurrentRound,
+					2.0f,
+					false
+				);
+			}
 
 			return true;
 		}
 
 		if (DealerHP <= 0)
 		{
-			GetWorldTimerManager().SetTimer(
-				RoundTimerHandle,
-				this,
-				&ABuckshotGameMode::StartNextRound,
-				2.0f,
-				false
-			);
+			if (CurrentRound == 3)
+			{
+				PlayVictoryEnding();
+			}
+			else
+			{
+				GetWorldTimerManager().SetTimer(
+					RoundTimerHandle,
+					this,
+					&ABuckshotGameMode::StartNextRound,
+					2.0f,
+					false
+				);
+			}
 
 			return true;
 		}
-	}
 
 	if (Magazine.Num() == 0)
 	{
@@ -942,10 +1001,14 @@ void ABuckshotGameMode::StartNextRound()
 	IsSawOff = false;
 	IsCuff = false;
 
-	// ==================================================
-	// 인벤토리 초기화
-	// 슬롯 위치는 유지하고 수량만 0
-	// ==================================================
+	// 새 라운드에서는 이전 라운드의 탄약을 전부 버림
+	Magazine.Empty();
+
+
+	RefreshHPUI();
+
+	// 라운드 시작 시 전환 UI 연출 실행
+	PlayRoundTransitionUI(CurrentRound);
 
 	InitializePlayerInventory();
 	InitializeDealerInventory();
