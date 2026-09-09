@@ -209,7 +209,6 @@ public:
 	bool bIsEndingPlaying;
 
 	// HP
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	int32 CurrentRound;
 

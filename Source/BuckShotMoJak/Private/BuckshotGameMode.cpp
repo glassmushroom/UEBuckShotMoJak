@@ -757,19 +757,19 @@ void ABuckshotGameMode::TriggerDealerTurn()
 // 사격
 // ======================================================
 
-bool ABuckshotGameMode::ShootTarget(
-	ETargetType Target
-)
-{
-	if (bIsReloadTransitionPlaying ||
-		Magazine.Num() == 0)
-	{
-		return false;
-	}
+//bool ABuckshotGameMode::ShootTarget(
+//	ETargetType Target
+//)
+//{
+//	if (bIsReloadTransitionPlaying ||
+//		Magazine.Num() == 0)
+//	{
+//		return false;
+//	}
+//}
 
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
-
 	if (bIsEndingPlaying)
 	{
 		return false;
@@ -905,57 +905,57 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 			return true;
 		}
 
-	if (Magazine.Num() == 0)
-	{
-		if (GEngine)
+		if (Magazine.Num() == 0)
 		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				3.f,
-				FColor::Yellow,
-				TEXT("탄창이 완전히 비었습니다. 재장전을 진행합니다.")
-			);
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(
+					-1,
+					3.f,
+					FColor::Yellow,
+					TEXT("탄창이 완전히 비었습니다. 재장전을 진행합니다.")
+				);
+			}
+
+			HandleMagazineEmpty();
+
+			return true;
 		}
 
-		HandleMagazineEmpty();
-
-		return true;
-	}
-
-	if (CurrentShell == EBulletType::Live)
-	{
-		SwitchTurn();
-	}
-	else
-	{
-		if (Target == ETargetType::Opponent)
+		if (CurrentShell == EBulletType::Live || Target == ETargetType::Opponent)
 		{
 			SwitchTurn();
 		}
 		else
 		{
-			if (IsPlayerTurn)
+			if (Target == ETargetType::Opponent)
 			{
-				if (BattleUIWidgetInstance)
-				{
-					BattleUIWidgetInstance->SetButtonsEnabled(true);
-				}
+				SwitchTurn();
 			}
 			else
 			{
-				FTimerHandle DealerContinueTimer;
+				if (IsPlayerTurn)
+				{
+					if (BattleUIWidgetInstance)
+					{
+						BattleUIWidgetInstance->SetButtonsEnabled(true);
+					}
+				}
+				else
+				{
+					FTimerHandle DealerContinueTimer;
 
-				GetWorldTimerManager().SetTimer(
-					DealerContinueTimer,
-					this,
-					&ABuckshotGameMode::TriggerDealerTurn,
-					1.0f,
-					false
-				);
+					GetWorldTimerManager().SetTimer(
+						DealerContinueTimer,
+						this,
+						&ABuckshotGameMode::TriggerDealerTurn,
+						1.0f,
+						false
+					);
+				}
 			}
 		}
 	}
-
 	return true;
 }
 
