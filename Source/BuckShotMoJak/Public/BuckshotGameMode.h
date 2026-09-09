@@ -6,6 +6,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "BuckshotGameMode.generated.h"
 
+class UEndingWidget;
 class UHPWidget;
 class URoundTransitionWidget;
 class ADealrAIController;
@@ -68,6 +69,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
 	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
+	UPROPERTY()
+	UEndingWidget* EndingWidgetInstance;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	TSubclassOf<UEndingWidget> EndingWidgetClass;
+
 	// 게임 상태
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EBulletType> Magazine;
@@ -83,6 +90,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	bool bIsReloadTransitionPlaying;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	bool bIsEndingPlaying;
 
 	// HP
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
@@ -165,6 +175,9 @@ private:
 	void TriggerDealerTurn();
 	void DistributeItemsToDealer(int32 ItemCount);
 	void HandleMagazineEmpty();
+
+	void PlayVictoryEnding();
+	void PlayDefeatEnding();
 
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;

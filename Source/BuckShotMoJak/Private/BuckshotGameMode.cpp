@@ -1,5 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+#include "EndingWidget.h"
 #include "BuckshotGameMode.h"
 #include "DealrAIController.h"
 #include "HPWidget.h"
@@ -15,6 +16,7 @@ ABuckshotGameMode::ABuckshotGameMode()
 	IsSawOff = false;
 	IsCuff = false;
 	bIsReloadTransitionPlaying = false;
+	bIsEndingPlaying = false;
 
 	CurrentRound = 0;
 	PlayerHP = 0;
@@ -23,6 +25,7 @@ ABuckshotGameMode::ABuckshotGameMode()
 
 	HPWidgetInstance = nullptr;
 	RoundTransitionWidgetInstance = nullptr;
+	EndingWidgetInstance = nullptr;
 }
 
 void ABuckshotGameMode::BeginPlay()
@@ -76,6 +79,16 @@ void ABuckshotGameMode::BeginPlay()
 				this,
 				&ABuckshotGameMode::OnReloadTransitionFinished
 			);
+		}
+	}
+
+	if (EndingWidgetClass && PC)
+	{
+		EndingWidgetInstance = CreateWidget<UEndingWidget>(PC, EndingWidgetClass);
+
+		if (EndingWidgetInstance)
+		{
+			EndingWidgetInstance->AddToViewport(11000);
 		}
 	}
 
@@ -133,6 +146,46 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 	}
 }
 
+void ABuckshotGameMode::PlayVictoryEnding()
+{
+	if (bIsEndingPlaying)
+	{
+		return;
+	}
+
+	bIsEndingPlaying = true;
+
+	if (EndingWidgetInstance)
+	{
+		EndingWidgetInstance->PlayVictoryEnding();
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("VICTORY"));
+	}
+}
+
+void ABuckshotGameMode::PlayDefeatEnding()
+{
+	if (bIsEndingPlaying)
+	{
+		return;
+	}
+
+	bIsEndingPlaying = true;
+
+	if (EndingWidgetInstance)
+	{
+		EndingWidgetInstance->PlayDefeatEnding();
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("GAME OVER"));
+	}
+}
+
 void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
 {
 	bIsReloadTransitionPlaying = true;
@@ -146,7 +199,7 @@ void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
 			ReloadTransitionFallbackHandle,
 			this,
 			&ABuckshotGameMode::OnReloadTransitionFinished,
-			2.5f,
+			5.0f,
 			false
 		);
 	}
@@ -284,10 +337,18 @@ void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
+
+	if (bIsEndingPlaying)
+	{
+		return false;
+	}
+
 	if (bIsReloadTransitionPlaying)
 	{
 		return false;
 	}
+
+	if (bIsEndingPlaying) return false;
 
 	if (Magazine.Num() == 0) return false;
 
@@ -325,22 +386,43 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		// 사망 처리 (사망 시 즉시 종료)
 		if (PlayerHP <= 0)
 		{
-			if (CurrentRound < 3)
+			if (CurrentRound == 3)
 			{
-				GetWorldTimerManager().SetTimer(RestartTimerHandle, this, &ABuckshotGameMode::ResetCurrentRound, 2.0f, false);
+				PlayDefeatEnding();
 			}
+			else
+			{
+				GetWorldTimerManager().SetTimer(
+					RestartTimerHandle,
+					this,
+					&ABuckshotGameMode::ResetCurrentRound,
+					2.0f,
+					false
+				);
+			}
+
 			return true;
 		}
 
 		if (DealerHP <= 0)
 		{
-			if (CurrentRound < 3)
+			if (CurrentRound == 3)
 			{
-				GetWorldTimerManager().SetTimer(RoundTimerHandle, this, &ABuckshotGameMode::StartNextRound, 2.0f, false);
+				PlayVictoryEnding();
 			}
+			else
+			{
+				GetWorldTimerManager().SetTimer(
+					RoundTimerHandle,
+					this,
+					&ABuckshotGameMode::StartNextRound,
+					2.0f,
+					false
+				);
+			}
+
 			return true;
 		}
-	}
 
 	if (OnShotFired.IsBound())
 	{
@@ -404,6 +486,10 @@ void ABuckshotGameMode::StartNextRound()
 	IsPlayerTurn = true;
 	IsSawOff = false;
 	IsCuff = false;
+
+	// 새 라운드에서는 이전 라운드의 탄약을 전부 버림
+	Magazine.Empty();
+
 
 	RefreshHPUI();
 
