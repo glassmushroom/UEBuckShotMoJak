@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,22 +7,26 @@
 class UEndingWidget;
 class UHPWidget;
 class URoundTransitionWidget;
-class ADealrAIController;
+class UBattleUIWidget;
 
-// 아이템 종류
+
+// ============================================================
+// Enum
+// ============================================================
+
 UENUM(BlueprintType)
 enum class EItemType : uint8
 {
-	None        UMETA(DisplayName = "None"),
-	Magnifier   UMETA(DisplayName = "Magnifier"), // 돋보기
-	Beer        UMETA(DisplayName = "Beer"),      // 맥주
-	Cigarette   UMETA(DisplayName = "Cigarette"), // 담배
-	Saw         UMETA(DisplayName = "Saw"),       // 톱
-	Handcuffs   UMETA(DisplayName = "Handcuffs"), // 수갑
-	Phone       UMETA(DisplayName = "Phone")      // 핸드폰
+	None,
+	Magnifier,
+	Beer,
+	Cigarette,
+	Saw,
+	Handcuffs,
+	Phone
 };
 
-// 총알 종류
+
 UENUM(BlueprintType)
 enum class EBulletType : uint8
 {
@@ -32,7 +34,7 @@ enum class EBulletType : uint8
 	Blank
 };
 
-// 대상
+
 UENUM(BlueprintType)
 enum class ETargetType : uint8
 {
@@ -40,8 +42,66 @@ enum class ETargetType : uint8
 	Opponent
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShellsLoaded, int32, LiveCount, int32, BlankCount);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShotFired, EBulletType, ShellType, ETargetType, Target);
+
+// ============================================================
+// Item Slot
+// ============================================================
+//
+// 슬롯 하나가
+//
+// [Beer x2]
+// [Saw x1]
+// [None]
+// ...
+//
+// 이런 식으로 아이템 종류와 개수를 같이 가지고 있음.
+// ============================================================
+
+USTRUCT(BlueprintType)
+struct FItemSlot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EItemType ItemType = EItemType::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Quantity = 0;
+
+	// 빈 슬롯 생성용
+	static FItemSlot None()
+	{
+		FItemSlot Slot;
+		Slot.ItemType = EItemType::None;
+		Slot.Quantity = 0;
+		return Slot;
+	}
+};
+
+
+// ============================================================
+// Delegate
+// ============================================================
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnShellsLoaded,
+	const TArray<EBulletType>&,
+	Magazine
+);
+
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnShotFired,
+	EBulletType,
+	ShellType,
+	ETargetType,
+	Target
+);
+
+
+// ============================================================
+// GameMode
+// ============================================================
 
 UCLASS()
 class BUCKSHOTMOJAK_API ABuckshotGameMode : public AGameModeBase
@@ -49,24 +109,78 @@ class BUCKSHOTMOJAK_API ABuckshotGameMode : public AGameModeBase
 	GENERATED_BODY()
 
 public:
+
 	ABuckshotGameMode();
 
 protected:
+
 	virtual void BeginPlay() override;
 
+
+	// ========================================================
+	// UI Callback
+	// ========================================================
+
+	UFUNCTION()
+	void OnShootDealerClicked();
+
+	UFUNCTION()
+	void OnShootMeClicked();
+
+	UFUNCTION()
+	void OnReloadTransitionFinished();
+
+	UFUNCTION()
+	void TriggerDealerTurn();
+
+	UFUNCTION()
+	void ResetCurrentRound();
+
+
 public:
-	// 카메라
+
+	// ========================================================
+	// Inventory
+	// ========================================================
+
+	// 플레이어 인벤토리
+	//
+	// 예:
+	// [Beer x2]
+	// [Saw x1]
+	// [None]
+	// [None]
+	// [None]
+	// [None]
+	//
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|Inventory")
+	TArray<FItemSlot> PlayerInventory;
+
+
+	// 딜러 인벤토리
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|Inventory")
+	TArray<FItemSlot> DealerInventory;
+
+
+	// ========================================================
+	// Camera
+	// ========================================================
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|Set")
 	AActor* MainCameraActor;
 
+
+	// ========================================================
 	// UI
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	// ========================================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI")
 	TSubclassOf<UHPWidget> HPWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|UI")
-	TSubclassOf<class UUserWidget> BattleUIClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|UI")
+	TSubclassOf<UBattleUIWidget> BattleUIClass;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Buckshot|UI")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI")
 	TSubclassOf<URoundTransitionWidget> RoundTransitionWidgetClass;
 
 	UPROPERTY()
@@ -79,16 +193,16 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
 	TArray<EBulletType> Magazine;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	bool IsPlayerTurn;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	bool IsSawOff;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	bool IsCuff;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	bool bIsReloadTransitionPlaying;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
@@ -96,18 +210,46 @@ public:
 
 	// HP
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "BuckShot|State")
 	int32 CurrentRound;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|State")
 	int32 PlayerHP;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|State")
 	int32 DealerHP;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Buckshot|State")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuckShot|State")
 	int32 MaxHP;
 
-	// 라운드 및 게임 로직
+
+	// ========================================================
+	// Item Texture
+	// ========================================================
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* SawTexture;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* PhoneTexture;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* MagnifierTexture;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* BeerTexture;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* CigaretteTexture;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BuckShot|UI|ItemTextures")
+	UTexture2D* HandcuffsTexture;
+
+
+	// ========================================================
+	// Magazine
+	// ========================================================
+
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Logic")
 	void LoadMagazine(int32 MaxShells = 8);
 
@@ -117,23 +259,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Logic")
 	void StartNextRound();
 
+
+	// ========================================================
+	// UI
+	// ========================================================
+
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
 	void RefreshHPUI();
 
-	// 라운드 전환 UI 제어
 	void PlayRoundTransitionUI(int32 RoundToDisplay);
 
-	UFUNCTION()
-	void OnReloadTransitionFinished();
 
-	// 애니메이션 및 이벤트
+	// ========================================================
+	// Delegate
+	// ========================================================
+
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
 	FOnShellsLoaded OnShellsLoaded;
 
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
 	FOnShotFired OnShotFired;
 
-	// 아이템 효과
+
+	// ========================================================
+	// Items
+	// ========================================================
+
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	EBulletType PeekNextShell();
 
@@ -152,32 +303,88 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	bool UsePhone(int32& OutIndex, EBulletType& OutType);
 
-	// AI 참고용 Getter
-	int32 GetDealerHP() const { return DealerHP; }
-	int32 GetMaxHP() const { return MaxHP; }
-	bool GetIsSawOff() const { return IsSawOff; }
-	bool GetIsCuff() const { return IsCuff; }
-	int32 GetMagazineCount() const { return Magazine.Num(); }
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
-	TArray<EItemType> PlayerInventory;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buckshot|State")
-	TArray<EItemType> DealerInventory;
-
-	// 아이템 지급
-	UFUNCTION(BlueprintCallable, Category = "Buckshot|Items")
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
 	void DistributeItems(int32 ItemCount);
 
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Items")
+	bool UseItemAtSlot(int32 SlotIndex, bool bIsPlayer);
+
+	UFUNCTION(BlueprintCallable)
+	bool UseItemByType(EItemType ItemType, bool bIsPlayer);
+
+	// ========================================================
+	// Inventory Initialization
+	// ========================================================
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Inventory")
+	void InitializePlayerInventory();
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|Inventory")
+	void InitializeDealerInventory();
+
+
+	// ========================================================
+	// Getter
+	// ========================================================
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
+	UTexture2D* GetItemTexture(EItemType ItemType) const;
+
+	UFUNCTION(BlueprintCallable, Category = "BuckShot|UI")
+	int32 GetItemCountInInventory(EItemType ItemType, bool bIsPlayer) const;
+
+	UFUNCTION(BlueprintPure, Category = "BuckShot|Inventory")
+	FItemSlot GetPlayerItemSlot(int32 SlotIndex) const;
+
+	UFUNCTION(BlueprintPure, Category = "BuckShot|Inventory")
+	FItemSlot GetDealerItemSlot(int32 SlotIndex) const;
+
+	int32 GetDealerHP() const
+	{
+		return DealerHP;
+	}
+
+	int32 GetMaxHP() const
+	{
+		return MaxHP;
+	}
+
+	bool GetIsSawOff() const
+	{
+		return IsSawOff;
+	}
+
+	bool GetIsCuff() const
+	{
+		return IsCuff;
+	}
+
+	int32 GetMagazineCount() const
+	{
+		return Magazine.Num();
+	}
+
+
 private:
+
+	// ========================================================
+	// Internal Logic
+	// ========================================================
+
 	void SwitchTurn();
-	void ResetCurrentRound();
-	void TriggerDealerTurn();
+
 	void DistributeItemsToDealer(int32 ItemCount);
+
 	void HandleMagazineEmpty();
 
 	void PlayVictoryEnding();
 	void PlayDefeatEnding();
+	void AddItemToInventorySlot(EItemType Item, bool bIsPlayer);
+
+
+	// ========================================================
+	// UI Instance
+	// ========================================================
 
 	UPROPERTY()
 	UHPWidget* HPWidgetInstance;
@@ -185,7 +392,17 @@ private:
 	UPROPERTY()
 	URoundTransitionWidget* RoundTransitionWidgetInstance;
 
+	UPROPERTY()
+	UBattleUIWidget* BattleUIWidgetInstance;
+
+
+	// ========================================================
+	// Timer
+	// ========================================================
+
 	FTimerHandle ReloadTransitionFallbackHandle;
+
 	FTimerHandle RoundTimerHandle;
+
 	FTimerHandle RestartTimerHandle;
 };
