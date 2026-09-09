@@ -759,7 +759,6 @@ void ABuckshotGameMode::TriggerDealerTurn()
 
 bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 {
-
 	if (bIsEndingPlaying)
 	{
 		return false;
