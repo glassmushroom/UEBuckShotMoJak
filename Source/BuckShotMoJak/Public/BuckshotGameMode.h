@@ -98,7 +98,19 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	Target
 );
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnTurnChanged,
+	bool,
+	bPlayerTurn
+);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnShellEjected,
+	EBulletType,
+	ShellType,
+	bool,
+	bFromPlayer
+);
 // ============================================================
 // GameMode
 // ============================================================
@@ -136,7 +148,8 @@ protected:
 	UFUNCTION()
 	void ResetCurrentRound();
 
-
+	//
+	void ExecutePendingItemUse();
 public:
 
 	// ========================================================
@@ -279,7 +292,11 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
 	FOnShotFired OnShotFired;
 
+	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
+	FOnTurnChanged OnTurnChanged;
 
+	UPROPERTY(BlueprintAssignable, Category = "BuckShot|Event")
+	FOnShellEjected OnShellEjected;
 	// ========================================================
 	// Items
 	// ========================================================
@@ -363,7 +380,10 @@ public:
 		return Magazine.Num();
 	}
 
-
+	bool IsItemUseInProgress() const
+	{
+		return bIsItemUseInProgress;
+	}
 private:
 
 	// ========================================================
@@ -404,4 +424,12 @@ private:
 	FTimerHandle RoundTimerHandle;
 
 	FTimerHandle RestartTimerHandle;
+
+	FTimerHandle ItemUseTimerHandle;
+
+	bool bIsItemUseInProgress = false;
+
+	int32 PendingItemSlotIndex = INDEX_NONE;
+
+	bool bPendingItemIsPlayer = true;
 };

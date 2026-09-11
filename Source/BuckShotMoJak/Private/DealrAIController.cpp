@@ -16,6 +16,35 @@ void ADealrAIController::TakeTurn(ABuckshotGameMode* GameMode)
 	if (!GameMode) return;
 
 	CachedGameMode = GameMode;
+	const TArray<EItemType> ItemPriority =
+	{
+		EItemType::Magnifier,
+		EItemType::Saw,
+		EItemType::Handcuffs,
+		EItemType::Beer,
+		EItemType::Phone,
+		EItemType::Cigarette
+	};
+
+	for (EItemType ItemType : ItemPriority)
+	{
+		const int32 Quantity =
+			GameMode->GetItemCountInInventory(
+				ItemType,
+				false
+			);
+
+		if (Quantity <= 0)
+		{
+			continue;
+		}
+
+		// 성공적으로 사용한 아이템은 한 턴에 하나만 사용.
+		if (GameMode->UseItemByType(ItemType, false))
+		{
+			break;
+		}
+	}
 
 	// 탄창 카운트 동기화
 	KnowLiveCount = 0;

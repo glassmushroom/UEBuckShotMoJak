@@ -36,10 +36,12 @@ ABuckshotGameMode::ABuckshotGameMode()
 	IsPlayerTurn = false;
 	IsSawOff = false;
 	IsCuff = false;
+
 	bIsReloadTransitionPlaying = false;
 	bIsEndingPlaying = false;
 
 	CurrentRound = 0;
+
 	PlayerHP = 0;
 	DealerHP = 0;
 	MaxHP = 0;
@@ -47,13 +49,15 @@ ABuckshotGameMode::ABuckshotGameMode()
 	HPWidgetInstance = nullptr;
 	RoundTransitionWidgetInstance = nullptr;
 	EndingWidgetInstance = nullptr;
+	BattleUIWidgetInstance = nullptr;
 }
 
 void ABuckshotGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	APlayerController* PC =
+		UGameplayStatics::GetPlayerController(this, 0);
 
 	if (PC)
 	{
@@ -83,7 +87,10 @@ void ABuckshotGameMode::BeginPlay()
 
 	if (PC && MainCameraActor)
 	{
-		PC->SetViewTargetWithBlend(MainCameraActor, 0.0f);
+		PC->SetViewTargetWithBlend(
+			MainCameraActor,
+			0.0f
+		);
 	}
 
 	// --------------------------------------------------
@@ -92,10 +99,11 @@ void ABuckshotGameMode::BeginPlay()
 
 	if (HPWidgetClass && PC)
 	{
-		HPWidgetInstance = CreateWidget<UHPWidget>(
-			PC,
-			HPWidgetClass
-		);
+		HPWidgetInstance =
+			CreateWidget<UHPWidget>(
+				PC,
+				HPWidgetClass
+			);
 
 		if (HPWidgetInstance)
 		{
@@ -126,9 +134,17 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
+	// --------------------------------------------------
+	// Ending UI
+	// --------------------------------------------------
+
 	if (EndingWidgetClass && PC)
 	{
-		EndingWidgetInstance = CreateWidget<UEndingWidget>(PC, EndingWidgetClass);
+		EndingWidgetInstance =
+			CreateWidget<UEndingWidget>(
+				PC,
+				EndingWidgetClass
+			);
 
 		if (EndingWidgetInstance)
 		{
@@ -136,7 +152,10 @@ void ABuckshotGameMode::BeginPlay()
 		}
 	}
 
-	// 배틀 UI 생성
+	// --------------------------------------------------
+	// Battle UI
+	// --------------------------------------------------
+
 	if (BattleUIClass && PC)
 	{
 		BattleUIWidgetInstance =
@@ -165,10 +184,13 @@ void ABuckshotGameMode::BeginPlay()
 				);
 			}
 
-			// 게임 시작 시 인벤토리 UI 갱신
 			BattleUIWidgetInstance->RefreshItemSlots();
 		}
 	}
+
+	// --------------------------------------------------
+	// 게임 시작
+	// --------------------------------------------------
 
 	StartNextRound();
 }
@@ -197,7 +219,6 @@ void ABuckshotGameMode::InitializePlayerInventory()
 {
 	PlayerInventory.SetNum(6);
 
-	// 슬롯 종류는 항상 고정
 	PlayerInventory[0].ItemType = EItemType::Magnifier;
 	PlayerInventory[1].ItemType = EItemType::Beer;
 	PlayerInventory[2].ItemType = EItemType::Cigarette;
@@ -205,7 +226,6 @@ void ABuckshotGameMode::InitializePlayerInventory()
 	PlayerInventory[4].ItemType = EItemType::Handcuffs;
 	PlayerInventory[5].ItemType = EItemType::Phone;
 
-	// 처음에는 수량 0
 	for (FItemSlot& Slot : PlayerInventory)
 	{
 		Slot.Quantity = 0;
@@ -216,7 +236,6 @@ void ABuckshotGameMode::InitializeDealerInventory()
 {
 	DealerInventory.SetNum(6);
 
-	// 슬롯 종류는 항상 고정
 	DealerInventory[0].ItemType = EItemType::Magnifier;
 	DealerInventory[1].ItemType = EItemType::Beer;
 	DealerInventory[2].ItemType = EItemType::Cigarette;
@@ -224,7 +243,6 @@ void ABuckshotGameMode::InitializeDealerInventory()
 	DealerInventory[4].ItemType = EItemType::Handcuffs;
 	DealerInventory[5].ItemType = EItemType::Phone;
 
-	// 처음에는 수량 0
 	for (FItemSlot& Slot : DealerInventory)
 	{
 		Slot.Quantity = 0;
@@ -232,10 +250,7 @@ void ABuckshotGameMode::InitializeDealerInventory()
 }
 
 // ======================================================
-// 특정 아이템을 직접 지급
-//
-// 랜덤 슬롯에 아이템을 넣는 것이 아니라
-// 해당 아이템의 고정 슬롯 Quantity만 증가
+// 특정 아이템 지급
 // ======================================================
 
 void ABuckshotGameMode::AddItemToInventorySlot(
@@ -244,7 +259,9 @@ void ABuckshotGameMode::AddItemToInventorySlot(
 )
 {
 	TArray<FItemSlot>& Inventory =
-		bIsPlayer ? PlayerInventory : DealerInventory;
+		bIsPlayer
+		? PlayerInventory
+		: DealerInventory;
 
 	for (FItemSlot& Slot : Inventory)
 	{
@@ -268,10 +285,6 @@ void ABuckshotGameMode::AddItemToInventorySlot(
 
 // ======================================================
 // 아이템 랜덤 지급
-//
-// 이제 이 함수는 "랜덤 슬롯에 넣기"가 아니라
-// 랜덤으로 아이템 종류를 선택해서
-// 그 아이템의 고정 슬롯 Quantity를 증가시킴
 // ======================================================
 
 void ABuckshotGameMode::DistributeItems(int32 ItemCount)
@@ -289,7 +302,10 @@ void ABuckshotGameMode::DistributeItems(int32 ItemCount)
 	for (int32 i = 0; i < ItemCount; ++i)
 	{
 		const int32 RandomIndex =
-			FMath::RandRange(0, AvailableItems.Num() - 1);
+			FMath::RandRange(
+				0,
+				AvailableItems.Num() - 1
+			);
 
 		AddItemToInventorySlot(
 			AvailableItems[RandomIndex],
@@ -337,7 +353,10 @@ void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 	for (int32 i = 0; i < ItemCount; ++i)
 	{
 		const int32 RandomIndex =
-			FMath::RandRange(0, AvailableItems.Num() - 1);
+			FMath::RandRange(
+				0,
+				AvailableItems.Num() - 1
+			);
 
 		AddItemToInventorySlot(
 			AvailableItems[RandomIndex],
@@ -347,104 +366,58 @@ void ABuckshotGameMode::DistributeItemsToDealer(int32 ItemCount)
 }
 
 // ======================================================
-// 아이템 사용
+// 아이템 사용 시작
 // ======================================================
 
-bool ABuckshotGameMode::UseItemAtSlot(int32 SlotIndex,bool bIsPlayer)
+bool ABuckshotGameMode::UseItemAtSlot(
+	int32 SlotIndex,
+	bool bIsPlayer
+)
 {
+	if (bIsItemUseInProgress)
+	{
+		return false;
+	}
+
 	TArray<FItemSlot>& Inventory =
-		bIsPlayer ? PlayerInventory : DealerInventory;
+		bIsPlayer
+		? PlayerInventory
+		: DealerInventory;
 
 	if (!Inventory.IsValidIndex(SlotIndex))
 	{
 		return false;
 	}
 
-	FItemSlot& UsedSlot = Inventory[SlotIndex];
+	const FItemSlot& ItemSlot = Inventory[SlotIndex];
 
-	if (UsedSlot.ItemType == EItemType::None ||
-		UsedSlot.Quantity <= 0)
+	if (
+		ItemSlot.ItemType == EItemType::None ||
+		ItemSlot.Quantity <= 0
+		)
 	{
 		return false;
 	}
 
-	const EItemType UsedItem = UsedSlot.ItemType;
-	bool bSuccess = false;
+	bIsItemUseInProgress = true;
 
-	switch (UsedItem)
+	PendingItemSlotIndex = SlotIndex;
+	bPendingItemIsPlayer = bIsPlayer;
+
+	if (bIsPlayer && BattleUIWidgetInstance)
 	{
-	case EItemType::Beer:
-		EjectCurrentShell();
-		bSuccess = true;
-		break;
-
-	case EItemType::Cigarette:
-		bSuccess = UseCigarette();
-		break;
-
-	case EItemType::Saw:
-		UseSaw();
-		bSuccess = true;
-		break;
-
-	case EItemType::Handcuffs:
-		bSuccess = UseHandcuffs();
-		break;
-
-	case EItemType::Magnifier:
-		PeekNextShell();
-		bSuccess = true;
-		break;
-
-	case EItemType::Phone:
-	{
-		int32 RevealedIndex = INDEX_NONE;
-		EBulletType RevealedShell = EBulletType::Blank;
-		bSuccess = UsePhone(RevealedIndex, RevealedShell);
-		break;
+		BattleUIWidgetInstance->SetButtonsEnabled(false);
 	}
 
-	default:
-		return false;
-	}
-
-	if (!bSuccess)
-	{
-		return false;
-	}
-
-	--UsedSlot.Quantity;
-
-	if (UsedSlot.Quantity <= 0)
-	{
-		UsedSlot.Quantity = 0;
-	}
-
-	if (BattleUIWidgetInstance)
-	{
-		BattleUIWidgetInstance->RefreshItemSlots();
-	}
+	GetWorldTimerManager().SetTimer(
+		ItemUseTimerHandle,
+		this,
+		&ABuckshotGameMode::ExecutePendingItemUse,
+		1.5f,
+		false
+	);
 
 	return true;
-}
-
-bool ABuckshotGameMode::UseItemByType(EItemType ItemType, bool bIsPlayer)
-{
-	TArray<FItemSlot>& Inventory =
-		bIsPlayer ? PlayerInventory : DealerInventory;
-
-	for (int32 Index = 0; Index < Inventory.Num(); ++Index)
-	{
-		const FItemSlot& ItemSlot = Inventory[Index];
-
-		if (ItemSlot.ItemType == ItemType &&
-			ItemSlot.Quantity > 0)
-		{
-			return UseItemAtSlot(Index, bIsPlayer);
-		}
-	}
-
-	return false;
 }
 
 // ======================================================
@@ -484,10 +457,15 @@ UTexture2D* ABuckshotGameMode::GetItemTexture(
 // 특정 아이템 전체 수량
 // ======================================================
 
-int32 ABuckshotGameMode::GetItemCountInInventory(EItemType ItemType,bool bIsPlayer) const
+int32 ABuckshotGameMode::GetItemCountInInventory(
+	EItemType ItemType,
+	bool bIsPlayer
+) const
 {
 	const TArray<FItemSlot>& Inventory =
-		bIsPlayer ? PlayerInventory : DealerInventory;
+		bIsPlayer
+		? PlayerInventory
+		: DealerInventory;
 
 	int32 TotalQuantity = 0;
 
@@ -502,7 +480,9 @@ int32 ABuckshotGameMode::GetItemCountInInventory(EItemType ItemType,bool bIsPlay
 	return TotalQuantity;
 }
 
-FItemSlot ABuckshotGameMode::GetPlayerItemSlot(int32 SlotIndex) const
+FItemSlot ABuckshotGameMode::GetPlayerItemSlot(
+	int32 SlotIndex
+) const
 {
 	if (!PlayerInventory.IsValidIndex(SlotIndex))
 	{
@@ -512,7 +492,9 @@ FItemSlot ABuckshotGameMode::GetPlayerItemSlot(int32 SlotIndex) const
 	return PlayerInventory[SlotIndex];
 }
 
-FItemSlot ABuckshotGameMode::GetDealerItemSlot(int32 SlotIndex) const
+FItemSlot ABuckshotGameMode::GetDealerItemSlot(
+	int32 SlotIndex
+) const
 {
 	if (!DealerInventory.IsValidIndex(SlotIndex))
 	{
@@ -528,14 +510,24 @@ FItemSlot ABuckshotGameMode::GetDealerItemSlot(int32 SlotIndex) const
 
 void ABuckshotGameMode::HandleMagazineEmpty()
 {
-	if (bIsReloadTransitionPlaying ||
+	if (
+		bIsReloadTransitionPlaying ||
 		PlayerHP <= 0 ||
-		DealerHP <= 0)
+		DealerHP <= 0
+		)
 	{
 		return;
 	}
 
 	bIsReloadTransitionPlaying = true;
+
+	const int32 ReloadItemCount =
+		GetItemCountForRound(CurrentRound);
+
+	if (ReloadItemCount > 0)
+	{
+		DistributeItems(ReloadItemCount);
+	}
 
 	if (RoundTransitionWidgetInstance)
 	{
@@ -553,6 +545,10 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 	}
 }
 
+// ======================================================
+// 승리
+// ======================================================
+
 void ABuckshotGameMode::PlayVictoryEnding()
 {
 	if (bIsEndingPlaying)
@@ -569,9 +565,18 @@ void ABuckshotGameMode::PlayVictoryEnding()
 
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("VICTORY"));
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			5.f,
+			FColor::Green,
+			TEXT("VICTORY")
+		);
 	}
 }
+
+// ======================================================
+// 패배
+// ======================================================
 
 void ABuckshotGameMode::PlayDefeatEnding()
 {
@@ -589,18 +594,33 @@ void ABuckshotGameMode::PlayDefeatEnding()
 
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("GAME OVER"));
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			5.f,
+			FColor::Red,
+			TEXT("GAME OVER")
+		);
 	}
 }
 
-void ABuckshotGameMode::PlayRoundTransitionUI(int32 RoundToDisplay)
+// ======================================================
+// 라운드 전환 UI
+// ======================================================
+
+void ABuckshotGameMode::PlayRoundTransitionUI(
+	int32 RoundToDisplay
+)
 {
 	bIsReloadTransitionPlaying = true;
 
 	if (RoundTransitionWidgetInstance)
 	{
 		RoundTransitionWidgetInstance->PlayReloadTransition(
-			FMath::Clamp(RoundToDisplay, 1, 3)
+			FMath::Clamp(
+				RoundToDisplay,
+				1,
+				3
+			)
 		);
 
 		GetWorldTimerManager().SetTimer(
@@ -630,7 +650,9 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 	bIsReloadTransitionPlaying = false;
 
 	LoadMagazine(
-		CurrentRound == 1 ? 4 : 8
+		CurrentRound == 1
+		? 4
+		: 8
 	);
 
 	if (IsPlayerTurn)
@@ -638,6 +660,7 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 		if (BattleUIWidgetInstance)
 		{
 			BattleUIWidgetInstance->SetButtonsEnabled(true);
+			BattleUIWidgetInstance->RefreshItemSlots();
 		}
 	}
 	else
@@ -663,31 +686,45 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 	Magazine.Empty();
 
 	const int32 TotalShells =
-		FMath::RandRange(2, MaxShells);
+		FMath::RandRange(
+			2,
+			MaxShells
+		);
 
 	const int32 LiveCount =
-		FMath::RandRange(1, TotalShells - 1);
+		FMath::RandRange(
+			1,
+			TotalShells - 1
+		);
 
 	const int32 BlankCount =
 		TotalShells - LiveCount;
 
 	for (int32 i = 0; i < LiveCount; ++i)
 	{
-		Magazine.Add(EBulletType::Live);
+		Magazine.Add(
+			EBulletType::Live
+		);
 	}
 
 	for (int32 i = 0; i < BlankCount; ++i)
 	{
-		Magazine.Add(EBulletType::Blank);
+		Magazine.Add(
+			EBulletType::Blank
+		);
 	}
 
+	// UI 표시용 배열
 	TArray<EBulletType> DisplayMagazine = Magazine;
 
 	if (OnShellsLoaded.IsBound())
 	{
-		OnShellsLoaded.Broadcast(DisplayMagazine);
+		OnShellsLoaded.Broadcast(
+			DisplayMagazine
+		);
 	}
 
+	// 실제 탄창은 표시 후 섞음
 	Algo::RandomShuffle(Magazine);
 
 	if (GEngine)
@@ -715,6 +752,15 @@ void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 
 void ABuckshotGameMode::TriggerDealerTurn()
 {
+	if (
+		bIsEndingPlaying ||
+		bIsReloadTransitionPlaying ||
+		IsPlayerTurn
+		)
+	{
+		return;
+	}
+
 	TArray<AActor*> FoundPawns;
 
 	UGameplayStatics::GetAllActorsOfClass(
@@ -727,7 +773,10 @@ void ABuckshotGameMode::TriggerDealerTurn()
 	{
 		APawn* Pawn = Cast<APawn>(Actor);
 
-		if (Pawn && !Pawn->IsPlayerControlled())
+		if (
+			Pawn &&
+			!Pawn->IsPlayerControlled()
+			)
 		{
 			ADealrAIController* DealerAI =
 				Cast<ADealrAIController>(
@@ -757,33 +806,52 @@ void ABuckshotGameMode::TriggerDealerTurn()
 // 사격
 // ======================================================
 
-bool ABuckshotGameMode::ShootTarget(ETargetType Target)
+bool ABuckshotGameMode::ShootTarget(
+	ETargetType Target
+)
 {
+	// 게임 종료
 	if (bIsEndingPlaying)
 	{
 		return false;
 	}
 
+	// 재장전/라운드 전환 중에는 사격 금지
 	if (bIsReloadTransitionPlaying)
 	{
-		BattleUIWidgetInstance->SetButtonsEnabled(false);
+		if (BattleUIWidgetInstance)
+		{
+			BattleUIWidgetInstance->SetButtonsEnabled(false);
+		}
+
+		return false;
 	}
 
-	if (bIsEndingPlaying) return false;
+	// 탄창이 비어 있으면 사격 금지
+	if (Magazine.Num() == 0)
+	{
+		return false;
+	}
 
-	if (Magazine.Num() == 0) return false;
+	const bool bShooterIsPlayer =
+		IsPlayerTurn;
 
-	EBulletType CurrentShell = Magazine[0];
+	const EBulletType CurrentShell =
+		Magazine[0];
 
 	Magazine.RemoveAt(0);
 
 	const int32 Damage =
-		IsSawOff ? 2 : 1;
+		IsSawOff
+		? 2
+		: 1;
 
 	IsSawOff = false;
 
 	const FString ShooterStr =
-		IsPlayerTurn ? TEXT("플레이어") : TEXT("딜러");
+		IsPlayerTurn
+		? TEXT("플레이어")
+		: TEXT("딜러");
 
 	const FString TargetStr =
 		(Target == ETargetType::Self)
@@ -819,22 +887,40 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		);
 	}
 
-	if (OnShotFired.IsBound())
-	{
-		OnShotFired.Broadcast(
-			CurrentShell,
-			Target
-		);
-	}
+	// --------------------------------------------------
+	// 사격 애니메이션 이벤트
+	// --------------------------------------------------
+
+	OnShotFired.Broadcast(
+		CurrentShell,
+		Target
+	);
+
+	// --------------------------------------------------
+	// 탄피 배출 애니메이션 이벤트
+	// --------------------------------------------------
+
+	OnShellEjected.Broadcast(
+		CurrentShell,
+		bShooterIsPlayer
+	);
+
+	// --------------------------------------------------
+	// 실탄 처리
+	// --------------------------------------------------
 
 	if (CurrentShell == EBulletType::Live)
 	{
 		if (
-			(IsPlayerTurn &&
-				Target == ETargetType::Opponent)
+			(
+				IsPlayerTurn &&
+				Target == ETargetType::Opponent
+				)
 			||
-			(!IsPlayerTurn &&
-				Target == ETargetType::Self)
+			(
+				!IsPlayerTurn &&
+				Target == ETargetType::Self
+				)
 			)
 		{
 			DealerHP =
@@ -853,6 +939,10 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 		}
 
 		RefreshHPUI();
+
+		// --------------------------------------------------
+		// 플레이어 사망
+		// --------------------------------------------------
 
 		if (PlayerHP <= 0)
 		{
@@ -874,6 +964,10 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 			return true;
 		}
 
+		// --------------------------------------------------
+		// 딜러 사망
+		// --------------------------------------------------
+
 		if (DealerHP <= 0)
 		{
 			if (CurrentRound == 3)
@@ -893,43 +987,51 @@ bool ABuckshotGameMode::ShootTarget(ETargetType Target)
 
 			return true;
 		}
-		}
+	}
 
-		if (Magazine.Num() == 0)
-		{
-			HandleMagazineEmpty();
-			return true;
-		}
+	// --------------------------------------------------
+	// 탄창이 비었는지 확인
+	// --------------------------------------------------
 
-		const bool bShouldSwitchTurn =
-			CurrentShell == EBulletType::Live ||
-			Target == ETargetType::Opponent;
-
-		if (bShouldSwitchTurn)
-		{
-			SwitchTurn();
-		}
-		else if (IsPlayerTurn)
-		{
-			if (BattleUIWidgetInstance)
-			{
-				BattleUIWidgetInstance->SetButtonsEnabled(true);
-			}
-		}
-		else
-		{
-			FTimerHandle DealerContinueTimer;
-
-			GetWorldTimerManager().SetTimer(
-				DealerContinueTimer,
-				this,
-				&ABuckshotGameMode::TriggerDealerTurn,
-				1.0f,
-				false
-			);
-		}
-
+	if (Magazine.Num() == 0)
+	{
+		HandleMagazineEmpty();
 		return true;
+	}
+
+	// --------------------------------------------------
+	// 턴 변경 규칙
+	// --------------------------------------------------
+
+	const bool bShouldSwitchTurn =
+		CurrentShell == EBulletType::Live ||
+		Target == ETargetType::Opponent;
+
+	if (bShouldSwitchTurn)
+	{
+		SwitchTurn();
+	}
+	else if (IsPlayerTurn)
+	{
+		if (BattleUIWidgetInstance)
+		{
+			BattleUIWidgetInstance->SetButtonsEnabled(true);
+		}
+	}
+	else
+	{
+		FTimerHandle DealerContinueTimer;
+
+		GetWorldTimerManager().SetTimer(
+			DealerContinueTimer,
+			this,
+			&ABuckshotGameMode::TriggerDealerTurn,
+			1.0f,
+			false
+		);
+	}
+
+	return true;
 }
 
 // ======================================================
@@ -957,33 +1059,40 @@ void ABuckshotGameMode::StartNextRound()
 		return;
 	}
 
-	// ==================================================
+	// --------------------------------------------------
 	// HP 초기화
-	// ==================================================
+	// --------------------------------------------------
 
-	MaxHP = CurrentRound * 2;
+	MaxHP =
+		CurrentRound * 2;
 
-	PlayerHP = MaxHP;
-	DealerHP = MaxHP;
+	PlayerHP =
+		MaxHP;
 
-	// ==================================================
+	DealerHP =
+		MaxHP;
+
+	// --------------------------------------------------
 	// 상태 초기화
-	// ==================================================
+	// --------------------------------------------------
 
 	IsPlayerTurn = true;
+
 	IsSawOff = false;
 	IsCuff = false;
 
-	// 새 라운드에서는 이전 라운드의 탄약을 전부 버림
+	// 이전 탄창 제거
 	Magazine.Empty();
 
-	// 라운드 시작 시 전환 UI 연출 실행
-
+	// --------------------------------------------------
+	// 인벤토리 초기화
+	// --------------------------------------------------
 
 	InitializePlayerInventory();
 	InitializeDealerInventory();
 
-	const int32 ItemCount = GetItemCountForRound(CurrentRound);
+	const int32 ItemCount =
+		GetItemCountForRound(CurrentRound);
 
 	if (ItemCount > 0)
 	{
@@ -992,11 +1101,23 @@ void ABuckshotGameMode::StartNextRound()
 
 	RefreshHPUI();
 
-	// ==================================================
-	// 라운드 시작 연출
-	// ==================================================
+	// --------------------------------------------------
+	// 턴 이벤트
+	//
+	// BattleUI에서 플레이어 방향으로 총을 돌림
+	// --------------------------------------------------
 
-	PlayRoundTransitionUI(CurrentRound);
+	OnTurnChanged.Broadcast(
+		IsPlayerTurn
+	);
+
+	// --------------------------------------------------
+	// 라운드 시작 연출
+	// --------------------------------------------------
+
+	PlayRoundTransitionUI(
+		CurrentRound
+	);
 }
 
 // ======================================================
@@ -1021,7 +1142,12 @@ void ABuckshotGameMode::SwitchTurn()
 	}
 	else
 	{
-		IsPlayerTurn = !IsPlayerTurn;
+		IsPlayerTurn =
+			!IsPlayerTurn;
+
+		OnTurnChanged.Broadcast(
+			IsPlayerTurn
+		);
 	}
 
 	if (GEngine)
@@ -1041,7 +1167,10 @@ void ABuckshotGameMode::SwitchTurn()
 
 	if (BattleUIWidgetInstance)
 	{
-		BattleUIWidgetInstance->SetButtonsEnabled(IsPlayerTurn);
+		BattleUIWidgetInstance->SetButtonsEnabled(
+			IsPlayerTurn
+		);
+
 		BattleUIWidgetInstance->RefreshItemSlots();
 	}
 
@@ -1072,19 +1201,24 @@ void ABuckshotGameMode::ResetCurrentRound()
 	Magazine.Empty();
 
 	IsPlayerTurn = true;
+
 	IsSawOff = false;
 	IsCuff = false;
 
-	MaxHP = CurrentRound * 2;
+	MaxHP =
+		CurrentRound * 2;
 
-	PlayerHP = MaxHP;
-	DealerHP = MaxHP;
+	PlayerHP =
+		MaxHP;
 
-	// 슬롯 구조 유지 + 수량 초기화
+	DealerHP =
+		MaxHP;
+
 	InitializePlayerInventory();
 	InitializeDealerInventory();
 
-	const int32 ItemCount = GetItemCountForRound(CurrentRound);
+	const int32 ItemCount =
+		GetItemCountForRound(CurrentRound);
 
 	if (ItemCount > 0)
 	{
@@ -1093,7 +1227,147 @@ void ABuckshotGameMode::ResetCurrentRound()
 
 	RefreshHPUI();
 
-	PlayRoundTransitionUI(CurrentRound);
+	// 플레이어 턴 이벤트
+	OnTurnChanged.Broadcast(
+		IsPlayerTurn
+	);
+
+	PlayRoundTransitionUI(
+		CurrentRound
+	);
+}
+
+// ======================================================
+// 아이템 사용 실행
+// ======================================================
+
+void ABuckshotGameMode::ExecutePendingItemUse()
+{
+	const int32 SlotIndex =
+		PendingItemSlotIndex;
+
+	const bool bIsPlayer =
+		bPendingItemIsPlayer;
+
+	bIsItemUseInProgress = false;
+
+	PendingItemSlotIndex =
+		INDEX_NONE;
+
+	TArray<FItemSlot>& Inventory =
+		bIsPlayer
+		? PlayerInventory
+		: DealerInventory;
+
+	if (!Inventory.IsValidIndex(SlotIndex))
+	{
+		return;
+	}
+
+	FItemSlot& UsedSlot =
+		Inventory[SlotIndex];
+
+	if (
+		UsedSlot.ItemType == EItemType::None ||
+		UsedSlot.Quantity <= 0
+		)
+	{
+		return;
+	}
+
+	const EItemType UsedItem =
+		UsedSlot.ItemType;
+
+	bool bSuccess = false;
+
+	switch (UsedItem)
+	{
+	case EItemType::Beer:
+
+		EjectCurrentShell();
+
+		bSuccess = true;
+
+		break;
+
+	case EItemType::Cigarette:
+
+		bSuccess =
+			UseCigarette();
+
+		break;
+
+	case EItemType::Saw:
+
+		UseSaw();
+
+		bSuccess = true;
+
+		break;
+
+	case EItemType::Handcuffs:
+
+		bSuccess =
+			UseHandcuffs();
+
+		break;
+
+	case EItemType::Magnifier:
+
+		if (Magazine.Num() > 0)
+		{
+			PeekNextShell();
+
+			bSuccess = true;
+		}
+
+		break;
+
+	case EItemType::Phone:
+	{
+		int32 RevealedIndex =
+			INDEX_NONE;
+
+		EBulletType RevealedShell =
+			EBulletType::Blank;
+
+		bSuccess =
+			UsePhone(
+				RevealedIndex,
+				RevealedShell
+			);
+
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	if (bSuccess)
+	{
+		UsedSlot.Quantity =
+			FMath::Max(
+				0,
+				UsedSlot.Quantity - 1
+			);
+	}
+
+	if (BattleUIWidgetInstance)
+	{
+		BattleUIWidgetInstance->RefreshItemSlots();
+
+		if (
+			bIsPlayer &&
+			IsPlayerTurn &&
+			!bIsReloadTransitionPlaying
+			)
+		{
+			BattleUIWidgetInstance->SetButtonsEnabled(
+				true
+			);
+		}
+	}
 }
 
 // ======================================================
@@ -1102,12 +1376,43 @@ void ABuckshotGameMode::ResetCurrentRound()
 
 EBulletType ABuckshotGameMode::PeekNextShell()
 {
-	if (Magazine.Num() > 0)
+	if (Magazine.Num() == 0)
 	{
-		return Magazine[0];
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				2.0f,
+				FColor::Red,
+				TEXT("[돋보기 사용 실패] 탄창이 비어 있습니다.")
+			);
+		}
+
+		return EBulletType::Blank;
 	}
 
-	return EBulletType::Blank;
+	const EBulletType NextShell =
+		Magazine[0];
+
+	if (GEngine)
+	{
+		const TCHAR* ShellText =
+			(NextShell == EBulletType::Live)
+			? TEXT("실탄")
+			: TEXT("공포탄");
+
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			3.0f,
+			FColor::Cyan,
+			FString::Printf(
+				TEXT("[돋보기 사용] 다음 탄은 %s입니다."),
+				ShellText
+			)
+		);
+	}
+
+	return NextShell;
 }
 
 // ======================================================
@@ -1123,17 +1428,16 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 
 	if (Magazine.Num() > 0)
 	{
-		EBulletType Ejected = Magazine[0];
+		const EBulletType Ejected =
+			Magazine[0];
 
 		Magazine.RemoveAt(0);
 
-		if (OnShotFired.IsBound())
-		{
-			OnShotFired.Broadcast(
-				Ejected,
-				ETargetType::Self
-			);
-		}
+		// 탄피 배출 이벤트
+		OnShellEjected.Broadcast(
+			Ejected,
+			IsPlayerTurn
+		);
 
 		if (GEngine)
 		{
@@ -1290,7 +1594,8 @@ bool ABuckshotGameMode::UsePhone(
 			Magazine.Num() - 1
 		);
 
-	OutType = Magazine[OutIndex];
+	OutType =
+		Magazine[OutIndex];
 
 	if (GEngine)
 	{
@@ -1320,7 +1625,11 @@ bool ABuckshotGameMode::UsePhone(
 
 void ABuckshotGameMode::OnShootDealerClicked()
 {
-	if (IsPlayerTurn)
+	if (
+		IsPlayerTurn &&
+		!bIsReloadTransitionPlaying &&
+		!bIsEndingPlaying
+		)
 	{
 		ShootTarget(
 			ETargetType::Opponent
@@ -1330,7 +1639,11 @@ void ABuckshotGameMode::OnShootDealerClicked()
 
 void ABuckshotGameMode::OnShootMeClicked()
 {
-	if (IsPlayerTurn)
+	if (
+		IsPlayerTurn &&
+		!bIsReloadTransitionPlaying &&
+		!bIsEndingPlaying
+		)
 	{
 		ShootTarget(
 			ETargetType::Self

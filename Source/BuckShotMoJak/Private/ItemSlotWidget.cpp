@@ -107,7 +107,7 @@ void UItemSlotWidget::SetSlotData(EItemType InType,UTexture2D* InTexture,int32 I
 		);
 
 		SlotButton->SetIsEnabled(
-			InCount > 0
+			bInIsPlayer && InCount > 0
 		);
 	}
 
