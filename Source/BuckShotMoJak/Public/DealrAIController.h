@@ -8,50 +8,46 @@
 UCLASS()
 class BUCKSHOTMOJAK_API ADealrAIController : public AAIController
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	ADealrAIController();
 
-	void TakeTurn(ABuckshotGameMode* GameMode);
+    ADealrAIController();
 
-	// Dealer 인벤토리
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dealer|Item")
-	TArray<EItemType> Inventory;
+    void TakeTurn(ABuckshotGameMode* GameMode);
 
-	// 아이템 추가
-	void AddItem(EItemType NewItem);
+private:
+    // AI가 최종적으로 결정한 대상
+    ETargetType PendingDecisionTarget = ETargetType::Opponent;
 
-	// 현재 인벤토리 개수
-	int32 GetInventoryCount() const
-	{
-		return Inventory.Num();
-	}
+    // AI 판단 완료 처리
+    void OnDecisionMade(ETargetType DecisionTarget);
 
-	// 인벤토리 비우기
-	void ClearInventory()
-	{
-		Inventory.Empty();
-	}
+    void ShotDecision();
+
+    bool TryUseItem();
+
+    bool HasItem(
+        EItemType ItemType,
+        int32& OutIndex
+    ) const;
+
+    void ClearAITimers();
 
 private:
 
-	// 사격 판단
-	void ShotDecision();
+    UPROPERTY()
+    ABuckshotGameMode* CachedGameMode;
 
-	// 아이템 사용 판단 및 실행
-	bool TryUseItem();
+    FTimerHandle DecisionTimerHandle;
 
-	// 특정 아이템 보유 여부
-	bool HasItem(EItemType ItemType, int32& OutIndex) const;
+    FTimerHandle ItemDecisionTimerHandle;
 
-	UPROPERTY()
-	ABuckshotGameMode* CachedGameMode;
+    TOptional<EBulletType> KnowNextShell;
 
-	// 다음 탄환을 알고 있는 경우
-	TOptional<EBulletType> KnowNextShell;
+    int32 KnowLiveCount;
 
-	// AI가 알고 있는 실탄/공포탄 개수
-	int32 KnowLiveCount = 0;
-	int32 KnowBlankCount = 0;
+    int32 KnowBlankCount;
+
+    bool bIsThinking;
 };

@@ -8,6 +8,8 @@
 #include "Components/Button.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Components/Widget.h"
+#include "Components/Image.h"
 
 // ======================================================
 // NativeConstruct
@@ -118,7 +120,16 @@ void UBattleUIWidget::NativeDestruct()
 		GetWorld()->GetTimerManager().ClearTimer(
 			ShellClearTimerHandle
 		);
+
+		GetWorld()->GetTimerManager().ClearTimer(
+			ShellEjectFinishTimerHandle
+		);
+
+		GetWorld()->GetTimerManager().ClearTimer(
+			UIAnimationTimerHandle
+		);
 	}
+
 
 	ClearAllShellIcons();
 
@@ -129,6 +140,33 @@ void UBattleUIWidget::NativeDestruct()
 // ======================================================
 // 버튼 활성 / 비활성
 // ======================================================
+
+void UBattleUIWidget::ShowEjectedShell(EBulletType BulletType)
+{
+	if (!ShellDisplayImage)
+	{
+		return;
+	}
+
+	// 탄 종류에 따라 텍스처 교체
+	UTexture2D* SelectedTexture = (BulletType == EBulletType::Live) ? LiveShellTexture : BlankShellTexture;
+
+	if (SelectedTexture)
+	{
+		ShellDisplayImage->SetBrushFromTexture(SelectedTexture);
+		ShellDisplayImage->SetVisibility(ESlateVisibility::Visible);
+
+		// 1초 뒤에 이미지를 다시 숨김
+		GetWorld()->GetTimerManager().ClearTimer(ShellImageTimerHandle);
+		GetWorld()->GetTimerManager().SetTimer(
+			ShellImageTimerHandle,
+			this,
+			&UBattleUIWidget::HideShellImage,
+			1.0f,
+			false
+		);
+	}
+}
 
 void UBattleUIWidget::SetButtonsEnabled(
 	bool bInEnable
@@ -197,6 +235,22 @@ void UBattleUIWidget::CreateItemSlots()
 			NewSlot
 		);
 	}
+}
+
+void UBattleUIWidget::PlayDelayedUIAnimation()
+{
+	if (!Anim_ShotRecoil)
+	{
+		return;
+	}
+
+	PlayAnimation(
+		Anim_ShotRecoil,
+		0.0f,
+		1,
+		EUMGSequencePlayMode::Forward,
+		1.0f
+	);
 }
 
 
@@ -415,39 +469,153 @@ void UBattleUIWidget::OnShellEjectedHandler(
 )
 {
 	// --------------------------------------------------
-	// 플레이어가 쏨
+	// 탄피 방향
+	//
+	// 플레이어가 쐈다
+	//     → 탄피는 딜러 방향
+	//
+	// 딜러가 쐈다
+	//     → 탄피는 플레이어 방향
 	// --------------------------------------------------
+
+	UWidgetAnimation* EjectAnimation = nullptr;
 
 	if (bFromPlayer)
 	{
-		if (Anim_EjectToPlayer)
-		{
-			PlayAnimation(
-				Anim_EjectToPlayer,
-				0.0f,
-				1,
-				EUMGSequencePlayMode::Forward,
-				1.0f
-			);
-		}
+		EjectAnimation = Anim_EjectToDealer;
 	}
-
-	// --------------------------------------------------
-	// 딜러가 쏨
-	// --------------------------------------------------
-
 	else
 	{
-		if (Anim_EjectToDealer)
+		EjectAnimation = Anim_EjectToPlayer;
+	}
+
+
+	// --------------------------------------------------
+	// 이벤트 자체가 들어왔는지 확인
+	// --------------------------------------------------
+
+	if (GEngine)
+	{
+		const TCHAR* ShooterText =
+			bFromPlayer
+			? TEXT("PLAYER")
+			: TEXT("DEALER");
+
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			3.0f,
+			FColor::Yellow,
+			FString::Printf(
+				TEXT("[탄피 이벤트] Shooter = %s"),
+				ShooterText
+			)
+		);
+	}
+
+
+	// --------------------------------------------------
+	// 애니메이션 포인터 확인
+	// --------------------------------------------------
+
+	if (!EjectAnimation)
+	{
+		if (GEngine)
 		{
-			PlayAnimation(
-				Anim_EjectToDealer,
-				0.0f,
-				1,
-				EUMGSequencePlayMode::Forward,
-				1.0f
+			if (bFromPlayer)
+			{
+				GEngine->AddOnScreenDebugMessage(
+					-1,
+					8.0f,
+					FColor::Red,
+					TEXT("[탄피 실패] Anim_EjectToDealer가 NULL입니다.")
+				);
+			}
+			else
+			{
+				GEngine->AddOnScreenDebugMessage(
+					-1,
+					8.0f,
+					FColor::Red,
+					TEXT("[탄피 실패] Anim_EjectToPlayer가 NULL입니다.")
+				);
+			}
+		}
+
+		return;
+	}
+
+
+	// --------------------------------------------------
+	// 기존 재생 정지
+	// --------------------------------------------------
+
+	StopAnimation(EjectAnimation);
+
+
+	// --------------------------------------------------
+	// 시작 위치를 확실하게 0초로 초기화
+	// --------------------------------------------------
+
+	SetAnimationCurrentTime(
+		EjectAnimation,
+		0.0f
+	);
+
+
+	// --------------------------------------------------
+	// 탄피 애니메이션 재생
+	// --------------------------------------------------
+
+	UUMGSequencePlayer* SequencePlayer =
+		PlayAnimation(
+			EjectAnimation,
+			0.0f,
+			1,
+			EUMGSequencePlayMode::Forward,
+			1.0f
+		);
+
+
+	// --------------------------------------------------
+	// PlayAnimation 결과 확인
+	// --------------------------------------------------
+
+	if (!SequencePlayer)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				8.0f,
+				FColor::Red,
+				TEXT("[탄피 실패] PlayAnimation()이 SequencePlayer를 생성하지 못했습니다.")
 			);
 		}
+
+		return;
+	}
+
+
+	// --------------------------------------------------
+	// 성공
+	// --------------------------------------------------
+
+	if (GEngine)
+	{
+		const TCHAR* DirectionText =
+			bFromPlayer
+			? TEXT("PLAYER -> DEALER")
+			: TEXT("DEALER -> PLAYER");
+
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			3.0f,
+			FColor::Green,
+			FString::Printf(
+				TEXT("[탄피 애니메이션 성공] %s"),
+				DirectionText
+			)
+		);
 	}
 }
 
@@ -631,6 +799,14 @@ void UBattleUIWidget::HideShellsAndEnableButtons()
 // 탄환 아이콘 전체 삭제
 // ======================================================
 
+void UBattleUIWidget::HideShellImage()
+{
+	if (ShellDisplayImage)
+	{
+		ShellDisplayImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 void UBattleUIWidget::ClearAllShellIcons()
 {
 	if (ShellContainer)
@@ -652,13 +828,17 @@ void UBattleUIWidget::OnTurnChangedHandler(
 {
 	RefreshItemSlots();
 
-	// --------------------------------------------------
-	// 재장전 연출 중이면 총 방향 애니메이션은 대기
-	// --------------------------------------------------
+	if (!GetWorld())
+	{
+		SetButtonsEnabled(false);
+		return;
+	}
+
+	// 턴이 바뀌는 순간 발사 버튼 잠금
+	SetButtonsEnabled(false);
 
 	if (bIsReloadingAnimation)
 	{
-		SetButtonsEnabled(false);
 		return;
 	}
 
@@ -668,9 +848,25 @@ void UBattleUIWidget::OnTurnChangedHandler(
 
 	if (bPlayerTurn)
 	{
-		// 총을 플레이어 방향으로 돌림
+		// 플레이어 턴 시작 시 기본적으로 딜러 방향을 바라본다.
+		// Self를 선택하면 PlayTargetAimAnimation(Self)가
+		// 반대 방향으로 돌린다.
+
 		if (Anim_TurnShotgun)
 		{
+			StopAnimation(Anim_TurnShotgun);
+
+			const float AnimationLength =
+				FMath::Max(
+					Anim_TurnShotgun->GetEndTime(),
+					0.01f
+				);
+
+			SetAnimationCurrentTime(
+				Anim_TurnShotgun,
+				0.0f
+			);
+
 			PlayAnimation(
 				Anim_TurnShotgun,
 				0.0f,
@@ -678,31 +874,136 @@ void UBattleUIWidget::OnTurnChangedHandler(
 				EUMGSequencePlayMode::Forward,
 				1.0f
 			);
-		}
 
-		// 플레이어 버튼 활성
-		ABuckshotGameMode* GameMode =
-			Cast<ABuckshotGameMode>(
-				UGameplayStatics::GetGameMode(this)
+			FTimerHandle PlayerAimFinishTimer;
+
+			GetWorld()->GetTimerManager().SetTimer(
+				PlayerAimFinishTimer,
+				[this]()
+				{
+					ABuckshotGameMode* GameMode =
+						Cast<ABuckshotGameMode>(
+							UGameplayStatics::GetGameMode(this)
+						);
+
+					if (
+						GameMode &&
+						GameMode->IsPlayerTurn &&
+						!GameMode->IsItemUseInProgress() &&
+						!GameMode->bIsReloadTransitionPlaying &&
+						!GameMode->bIsEndingPlaying
+						)
+					{
+						SetButtonsEnabled(true);
+					}
+				},
+				AnimationLength,
+				false
 			);
-
-		if (
-			GameMode &&
-			!GameMode->IsItemUseInProgress()
-			)
-		{
-			SetButtonsEnabled(true);
 		}
 		else
 		{
-			SetButtonsEnabled(false);
+			SetButtonsEnabled(true);
+		}
+	}
+
+	// --------------------------------------------------
+	// 딜러 턴
+	// --------------------------------------------------
+
+	else
+	{
+		// 실제 총 방향 전환은 GameMode::TriggerDealerTurn()
+		// 에서 처리한다.
+		SetButtonsEnabled(false);
+	}
+}
+
+
+float UBattleUIWidget::PlayTargetAimAnimation(ETargetType Target)
+{
+	if (!Anim_TurnShotgun)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				2.0f,
+				FColor::Red,
+				TEXT("[총 방향 오류] Anim_TurnShotgun이 바인딩되지 않았습니다.")
+			);
+		}
+
+		return 0.01f;
+	}
+
+	const float AnimationLength =
+		FMath::Max(
+			Anim_TurnShotgun->GetEndTime(),
+			0.01f
+		);
+
+	StopAnimation(Anim_TurnShotgun);
+
+	// --------------------------------------------------
+	// Self = 애니메이션 끝 → 시작
+	// Opponent = 애니메이션 시작 → 끝
+	// --------------------------------------------------
+
+	if (Target == ETargetType::Self)
+	{
+		// Reverse 시작점을 명시적으로 끝으로 설정
+		SetAnimationCurrentTime(
+			Anim_TurnShotgun,
+			AnimationLength
+		);
+
+		PlayAnimation(
+			Anim_TurnShotgun,
+			AnimationLength,
+			1,
+			EUMGSequencePlayMode::Reverse,
+			1.0f
+		);
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				1.5f,
+				FColor::Cyan,
+				TEXT("[총 방향] Self → Reverse 재생")
+			);
 		}
 	}
 	else
 	{
-		// 딜러 턴
-		SetButtonsEnabled(false);
+		// Forward 시작점을 명시적으로 0으로 설정
+		SetAnimationCurrentTime(
+			Anim_TurnShotgun,
+			0.0f
+		);
+
+		PlayAnimation(
+			Anim_TurnShotgun,
+			0.0f,
+			1,
+			EUMGSequencePlayMode::Forward,
+			1.0f
+		);
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				1.5f,
+				FColor::Cyan,
+				TEXT("[총 방향] Opponent → Forward 재생")
+			);
+		}
 	}
+
+	return AnimationLength;
 }
 
 
