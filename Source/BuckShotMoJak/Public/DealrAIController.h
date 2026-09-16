@@ -16,6 +16,8 @@ public:
 
     void TakeTurn(ABuckshotGameMode* GameMode);
 
+    void StopForEnding();
+
 private:
     // AI가 최종적으로 결정한 대상
     ETargetType PendingDecisionTarget = ETargetType::Opponent;

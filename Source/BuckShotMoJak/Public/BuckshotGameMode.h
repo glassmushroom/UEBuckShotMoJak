@@ -173,6 +173,7 @@ private:
 	void HandleMagazineEmpty();
 	void PlayVictoryEnding();
 	void PlayDefeatEnding();
+	bool BeginEnding();
 	void AddItemToInventorySlot(EItemType Item, bool bIsPlayer);
 
 	UPROPERTY() UHPWidget* HPWidgetInstance;

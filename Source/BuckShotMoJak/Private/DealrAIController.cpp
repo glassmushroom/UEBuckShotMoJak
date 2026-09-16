@@ -31,6 +31,14 @@ void ADealrAIController::ClearAITimers()
     GetWorldTimerManager().ClearTimer(ItemDecisionTimerHandle);
 }
 
+void ADealrAIController::StopForEnding()
+{
+    ClearAITimers();
+    bIsThinking = false;
+    StopMovement();
+    SetActorTickEnabled(false);
+}
+
 
 // ============================================================
 // AI 턴 시작
@@ -38,7 +46,7 @@ void ADealrAIController::ClearAITimers()
 
 void ADealrAIController::TakeTurn(ABuckshotGameMode* GameMode)
 {
-    if (!GameMode)
+    if (!GameMode || GameMode->bIsEndingPlaying)
     {
         return;
     }
@@ -172,7 +180,7 @@ bool ADealrAIController::HasItem(
 
 void ADealrAIController::OnDecisionMade(ETargetType DecisionTarget)
 {
-    if (!CachedGameMode)
+    if (!CachedGameMode || CachedGameMode->bIsEndingPlaying)
     {
         bIsThinking = false;
         return;
@@ -221,7 +229,7 @@ void ADealrAIController::OnDecisionMade(ETargetType DecisionTarget)
 
 bool ADealrAIController::TryUseItem()
 {
-    if (!CachedGameMode)
+    if (!CachedGameMode || CachedGameMode->bIsEndingPlaying)
     {
         return false;
     }
@@ -514,6 +522,13 @@ bool ADealrAIController::TryUseItem()
 
 void ADealrAIController::ShotDecision()
 {
+    if (!CachedGameMode || CachedGameMode->bIsEndingPlaying)
+    {
+        ClearAITimers();
+        bIsThinking = false;
+        return;
+    }
+
     // 현재 판단 타이머 정리
     GetWorldTimerManager().ClearTimer(
         DecisionTimerHandle
