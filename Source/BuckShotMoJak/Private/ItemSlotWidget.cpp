@@ -107,7 +107,7 @@ void UItemSlotWidget::SetSlotData(EItemType InType,UTexture2D* InTexture,int32 I
 		);
 
 		SlotButton->SetIsEnabled(
-			InCount > 0
+			bInIsPlayer && InCount > 0
 		);
 	}
 
@@ -174,54 +174,34 @@ void UItemSlotWidget::ClearSlot()
 	}
 }
 
-
-// ==================================================
-// 슬롯 클릭
-// ==================================================
+// ======================================================
+// 아이템 슬롯 클릭
+// ======================================================
 
 void UItemSlotWidget::OnSlotClicked()
 {
-	if (CurrentItemType == EItemType::None)
+	if (!bIsPlayerSlot)
 	{
 		return;
 	}
 
-	ABuckshotGameMode* GM =
+	if (SlotIndex < 0)
+	{
+		return;
+	}
+
+	ABuckshotGameMode* GameMode =
 		Cast<ABuckshotGameMode>(
 			UGameplayStatics::GetGameMode(this)
 		);
 
-	if (!GM)
+	if (!GameMode)
 	{
 		return;
 	}
 
-	// 딜러 턴에는 플레이어 아이템을 사용할 수 없다.
-	if (!bIsPlayerSlot || !GM->IsPlayerTurn)
-	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				2.0f,
-				FColor::Yellow,
-				TEXT("지금은 플레이어 턴이 아닙니다.")
-			);
-		}
-
-		return;
-	}
-
-	const bool bUsed =
-		GM->UseItemByType(CurrentItemType, true);
-
-	if (!bUsed && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			-1,
-			2.0f,
-			FColor::Red,
-			TEXT("아이템을 지금 사용할 수 없습니다.")
-		);
-	}
+	GameMode->UseItemAtSlot(
+		SlotIndex,
+		true
+	);
 }

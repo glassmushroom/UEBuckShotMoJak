@@ -9,6 +9,8 @@ class UHorizontalBox;
 class UButton;
 class UShellIcon;
 class UItemSlotWidget;
+class UWidgetAnimation;
+class UTexture2D;
 
 UCLASS()
 class BUCKSHOTMOJAK_API UBattleUIWidget : public UUserWidget
@@ -16,26 +18,54 @@ class BUCKSHOTMOJAK_API UBattleUIWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	// 탄 종류에 따라 이미지를 바꾸고 화면에 띄우는 함수 (C++ 구현)
+	UFUNCTION(BlueprintCallable, Category = "ShellDisplay")
+	void ShowEjectedShell(EBulletType BulletType);
 
-	// ==================================================
-	// 버튼 활성화 / 비활성화
-	// ==================================================
+	// 위젯에 배치할 이미지 컴포넌트 바인딩 (디자이너의 Image 이름과 일치시켜야 함)
+	UPROPERTY(meta = (BindWidget))
+	class UImage* ShellDisplayImage;
 
-	UFUNCTION(BlueprintCallable, Category = "UI")
+	// 실탄 텍스처
+	UPROPERTY(EditDefaultsOnly, Category = "ShellDisplay")
+	class UTexture2D* LiveShellTexture;
+
+	// 공포탄 텍스처
+	UPROPERTY(EditDefaultsOnly, Category = "ShellDisplay")
+	class UTexture2D* BlankShellTexture;
+
+	UPROPERTY(meta = (BindWidget))
+	UButton* ShootDealer;
+
+	UPROPERTY(meta = (BindWidget))
+	UButton* ShootME;
+
+
+	// ======================================================
+	// 버튼
+	// ======================================================
+
+	UFUNCTION(BlueprintCallable)
 	void SetButtonsEnabled(bool bInEnable);
 
 
-	// ==================================================
-	// 아이템 슬롯 갱신
-	// ==================================================
+	// ======================================================
+	// 아이템
+	// ======================================================
 
-	UFUNCTION(BlueprintCallable, Category = "UI")
+	UFUNCTION(BlueprintCallable)
 	void RefreshItemSlots();
 
+	UFUNCTION(BlueprintCallable)
+	void CreateDealerItemSlots();
 
-	// ==================================================
-	// 사격 이벤트
-	// ==================================================
+	UFUNCTION(BlueprintCallable)
+	void RefreshDealerItemSlots();
+
+
+	// ======================================================
+	// GameMode Delegate
+	// ======================================================
 
 	UFUNCTION()
 	void OnShotFiredHandler(
@@ -43,14 +73,33 @@ public:
 		ETargetType Target
 	);
 
-
-	// ==================================================
-	// 장전 이벤트
-	// ==================================================
+	UFUNCTION()
+	void OnShellEjectedHandler(
+		EBulletType ShellType,
+		bool bFromPlayer
+	);
 
 	UFUNCTION()
 	void OnShellsLoadedHandler(
 		const TArray<EBulletType>& Magazine
+	);
+
+	UFUNCTION()
+	void OnTurnChangedHandler(
+		bool bPlayerTurn
+	);
+
+
+	// ======================================================
+	// 총 방향
+	// ======================================================
+
+	UFUNCTION(BlueprintCallable)
+	void PlayTurnShotgunAnimation();
+
+	UFUNCTION(BlueprintCallable)
+	float PlayTargetAimAnimation(
+		ETargetType Target
 	);
 
 
@@ -60,147 +109,118 @@ protected:
 	virtual void NativeDestruct() override;
 
 
-	// ==================================================
-	// 블루프린트 이벤트
-	// ==================================================
+	// ======================================================
+	// 탄환 UI
+	// ======================================================
 
-	UFUNCTION(
-		BlueprintImplementableEvent,
-		Category = "Buckshot|UI"
-	)
-	void BP_RefreshItemSlots();
-
-
-	// ==================================================
-	// 아이템 슬롯 위젯 클래스
-	// ==================================================
-
-	UPROPERTY(
-		EditDefaultsOnly,
-		Category = "Inventory"
-	)
-	TSubclassOf<UItemSlotWidget> ItemSlotClass;
-
-
-	// ==================================================
-	// 플레이어 인벤토리 박스
-	// ==================================================
-
-	UPROPERTY(
-		meta = (BindWidgetOptional),
-		BlueprintReadOnly
-	)
-	UHorizontalBox* PlayerInventoryBox;
-
-
-private:
-
-	// ==================================================
-	// 재장전 애니메이션
-	// ==================================================
-
-	bool bIsReloadingAnimation = false;
-
-
-	// ==================================================
-	// 탄 아이콘 관련
-	// ==================================================
-
-	void ClearAllShellIcons();
-
-	void SpawnNextShellIcon();
-
-	void HideShellsAndEnableButtons();
-
-	void CreateItemSlots();
-public:
-
-	// ==================================================
-	// 버튼
-	// ==================================================
-
-	UPROPERTY(
-		meta = (BindWidget)
-	)
-	UButton* ShootDealer;
-
-	UPROPERTY(
-		meta = (BindWidget)
-	)
-	UButton* ShootME;
-
-
-	// ==================================================
-	// 탄 UI
-	// ==================================================
-
-	UPROPERTY(
-		meta = (BindWidget)
-	)
+	UPROPERTY(meta = (BindWidget))
 	UHorizontalBox* ShellContainer;
 
-
-	UPROPERTY(
-		EditDefaultsOnly,
-		Category = "UI"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Shell")
 	TSubclassOf<UShellIcon> ShellIconClass;
 
 
-	// ==================================================
-	// 아이템 UI 컨테이너
-	// ==================================================
+	// ======================================================
+	// 아이템 UI
+	// ======================================================
 
-	UPROPERTY(
-		meta = (BindWidget),
-		BlueprintReadWrite,
-		Category = "UI"
-	)
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	UHorizontalBox* ItemContainer;
 
+	UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly)
+	UHorizontalBox* DealerItemContainer;
 
-	// ==================================================
-	// ★ 실제로 화면에 생성된 아이템 슬롯들
-	//
-	// 0 = 돋보기
-	// 1 = 맥주
-	// 2 = 담배
-	// 3 = 톱
-	// 4 = 수갑
-	// 5 = 핸드폰
-	// ==================================================
+	UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly)
+	UHorizontalBox* PlayerInventoryBox;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	TSubclassOf<UItemSlotWidget> ItemSlotClass;
+
+
+	// ======================================================
+	// 아이템 슬롯
+	// ======================================================
 
 	UPROPERTY()
 	TArray<UItemSlotWidget*> ItemSlots;
 
+	UPROPERTY()
+	TArray<UItemSlotWidget*> DealerItemSlots;
+
+
+	// ======================================================
+	// UMG Animation
+	// ======================================================
+
+	UPROPERTY(
+		Transient,
+		meta = (BindWidgetAnim)
+	)
+	UWidgetAnimation* Anim_TurnShotgun;
+
+	UPROPERTY(
+		Transient,
+		meta = (BindWidgetAnim)
+	)
+	UWidgetAnimation* Anim_ShotRecoil;
+
+	UPROPERTY(
+		Transient,
+		meta = (BindWidgetAnim)
+	)
+	UWidgetAnimation* Anim_EjectToPlayer;
+
+	UPROPERTY(
+		Transient,
+		meta = (BindWidgetAnim)
+	)
+	UWidgetAnimation* Anim_EjectToDealer;
+
+
+	// ======================================================
+	// Blueprint
+	// ======================================================
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void BP_RefreshItemSlots();
+
 
 private:
+	FTimerHandle ShellImageTimerHandle;
+	void HideShellImage();
 
-	// ==================================================
-	// 현재 화면에 표시되어 있는 탄 아이콘
-	// ==================================================
+	void ClearAllShellIcons();
+	void SpawnNextShellIcon();
+	void HideShellsAndEnableButtons();
+	void CreateItemSlots();
+
+
+	// ======================================================
+	// 탄환 아이콘
+	// ======================================================
 
 	UPROPERTY()
 	TArray<UShellIcon*> ActiveShellIcons;
 
-
-	// ==================================================
-	// 장전 연출을 위해 아직 표시하지 않은 탄
-	// ==================================================
-
 	TArray<EBulletType> PendingShellsToSpawn;
 
-
-	// ==================================================
-	// 탄 생성 타이머
-	// ==================================================
-
 	FTimerHandle ShellSpawnTimerHandle;
-
-
-	// ==================================================
-	// 탄 제거 타이머
-	// ==================================================
-
 	FTimerHandle ShellClearTimerHandle;
+
+
+	// ======================================================
+	// 탄피 애니메이션 진단용
+	// ======================================================
+
+	FTimerHandle ShellEjectFinishTimerHandle;
+
+
+	bool bIsReloadingAnimation = false;
+
+	// UMG 애니메이션 순서 제어용
+	FTimerHandle UIAnimationTimerHandle;
+
+	void PlayDelayedUIAnimation();
+
+	float PendingUIAnimationDelay = 1.3f;
 };
