@@ -128,6 +128,10 @@ void UBattleUIWidget::NativeDestruct()
 		GetWorld()->GetTimerManager().ClearTimer(
 			UIAnimationTimerHandle
 		);
+
+		GetWorld()->GetTimerManager().ClearTimer(
+			MagnifierDisplayTimerHandle
+		);
 	}
 
 
@@ -141,6 +145,86 @@ void UBattleUIWidget::NativeDestruct()
 // 버튼 활성 / 비활성
 // ======================================================
 
+void UBattleUIWidget::ShowCurrentMagazine()
+{
+	ABuckshotGameMode* GameMode =
+		Cast<ABuckshotGameMode>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!GameMode)
+	{
+		return;
+	}
+
+	if (!ShellContainer || !ShellIconClass)
+	{
+		return;
+	}
+
+	if (GameMode->Magazine.Num() <= 0)
+	{
+		return;
+	}
+
+	GetWorld()->GetTimerManager().ClearTimer(
+		MagnifierDisplayTimerHandle
+	);
+
+	ClearAllShellIcons();
+
+	const EBulletType CurrentShell =
+		GameMode->Magazine[0];
+
+	UShellIcon* NewShellIcon =
+		CreateWidget<UShellIcon>(
+			GetWorld(),
+			ShellIconClass
+		);
+
+	if (!NewShellIcon)
+	{
+		return;
+	}
+
+	NewShellIcon->SetShellType(
+		CurrentShell
+	);
+
+	ShellContainer->AddChild(
+		NewShellIcon
+	);
+
+	ActiveShellIcons.Add(
+		NewShellIcon
+	);
+
+	GetWorld()->GetTimerManager().SetTimer(
+		MagnifierDisplayTimerHandle,
+		this,
+		&UBattleUIWidget::ClearAllShellIcons,
+		2.0f,
+		false
+	);
+
+	if (GEngine)
+	{
+		const TCHAR* ShellText =
+			CurrentShell == EBulletType::Live
+			? TEXT("LIVE")
+			: TEXT("BLANK");
+
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			3.0f,
+			FColor::Green,
+			FString::Printf(
+				TEXT("[돋보기] 현재 장전된 탄 -> %s"),
+				ShellText
+			)
+		);
+	}
+}
 void UBattleUIWidget::ShowEjectedShell(EBulletType BulletType)
 {
 	if (!ShellDisplayImage)
