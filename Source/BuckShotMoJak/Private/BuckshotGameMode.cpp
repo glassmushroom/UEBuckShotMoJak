@@ -145,18 +145,15 @@ void ABuckshotGameMode::BeginPlay()
 	// Ending UI
 	// --------------------------------------------------
 
-	if (EndingWidgetClass && PC)
+	if (PC)
 	{
 		EndingWidgetInstance =
 			CreateWidget<UEndingWidget>(
 				PC,
-				EndingWidgetClass
+				EndingWidgetClass ? EndingWidgetClass.Get() : UEndingWidget::StaticClass()
 			);
 
-		if (EndingWidgetInstance)
-		{
-			EndingWidgetInstance->AddToViewport(11000);
-		}
+		// Add only when the ending starts, so gameplay input remains unaffected.
 	}
 
 	// --------------------------------------------------
@@ -358,7 +355,7 @@ bool ABuckshotGameMode::UseItemAtSlot(
 	bool bIsPlayer
 )
 {
-	if (bIsItemUseInProgress)
+	if (bIsEndingPlaying || bIsItemUseInProgress)
 	{
 		return false;
 	}
@@ -521,6 +518,7 @@ FItemSlot ABuckshotGameMode::GetDealerItemSlot(
 void ABuckshotGameMode::HandleMagazineEmpty()
 {
 	if (
+		bIsEndingPlaying ||
 		bIsReloadTransitionPlaying ||
 		PlayerHP <= 0 ||
 		DealerHP <= 0
@@ -561,12 +559,10 @@ void ABuckshotGameMode::HandleMagazineEmpty()
 
 void ABuckshotGameMode::PlayVictoryEnding()
 {
-	if (bIsEndingPlaying)
+	if (!BeginEnding())
 	{
 		return;
 	}
-
-	bIsEndingPlaying = true;
 
 	if (EndingWidgetInstance)
 	{
@@ -580,17 +576,73 @@ void ABuckshotGameMode::PlayVictoryEnding()
 
 void ABuckshotGameMode::PlayDefeatEnding()
 {
-	if (bIsEndingPlaying)
+	if (!BeginEnding())
 	{
 		return;
 	}
-
-	bIsEndingPlaying = true;
 
 	if (EndingWidgetInstance)
 	{
 		EndingWidgetInstance->PlayDefeatEnding();
 	}
+}
+
+bool ABuckshotGameMode::BeginEnding()
+{
+	if (bIsEndingPlaying) return false;
+	bIsEndingPlaying = true;
+
+	// Includes the locally scoped turn/continue timers bound to this GameMode.
+	GetWorldTimerManager().ClearAllTimersForObject(this);
+	// Lambda timers are not covered by ClearAllTimersForObject.
+	GetWorldTimerManager().ClearTimer(DealerAimTimerHandle);
+	bIsDealerAimPending = false;
+	bIsDealerDecisionPending = false;
+	bIsPlayerShotPending = false;
+	bIsItemUseInProgress = false;
+	PendingItemSlotIndex = INDEX_NONE;
+	bIsReloadTransitionPlaying = false;
+
+	TArray<AActor*> DealerControllers;
+	UGameplayStatics::GetAllActorsOfClass(this, ADealrAIController::StaticClass(), DealerControllers);
+	for (AActor* Actor : DealerControllers)
+	{
+		CastChecked<ADealrAIController>(Actor)->StopForEnding();
+	}
+
+	if (BattleUIWidgetInstance)
+	{
+		BattleUIWidgetInstance->SetButtonsEnabled(false);
+		BattleUIWidgetInstance->SetIsEnabled(false);
+		BattleUIWidgetInstance->StopAllAnimations();
+		GetWorldTimerManager().ClearAllTimersForObject(BattleUIWidgetInstance);
+		BattleUIWidgetInstance->RemoveFromParent();
+	}
+	if (HPWidgetInstance) HPWidgetInstance->RemoveFromParent();
+	if (RoundTransitionWidgetInstance)
+	{
+		RoundTransitionWidgetInstance->OnTransitionFinished.RemoveDynamic(this, &ABuckshotGameMode::OnReloadTransitionFinished);
+		RoundTransitionWidgetInstance->StopAllAnimations();
+		GetWorldTimerManager().ClearAllTimersForObject(RoundTransitionWidgetInstance);
+		RoundTransitionWidgetInstance->RemoveFromParent();
+	}
+	if (GEngine) GEngine->ClearOnScreenDebugMessages();
+
+	if (EndingWidgetInstance)
+	{
+		EndingWidgetInstance->SetIsFocusable(true);
+		EndingWidgetInstance->AddToViewport(11000);
+	}
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		PC->SetIgnoreMoveInput(true);
+		PC->SetIgnoreLookInput(true);
+		PC->bShowMouseCursor = false;
+		FInputModeUIOnly InputMode;
+		if (EndingWidgetInstance) InputMode.SetWidgetToFocus(EndingWidgetInstance->TakeWidget());
+		PC->SetInputMode(InputMode);
+	}
+	return true;
 }
 
 // ======================================================
@@ -601,6 +653,8 @@ void ABuckshotGameMode::PlayRoundTransitionUI(
 	int32 RoundToDisplay
 )
 {
+	if (bIsEndingPlaying) return;
+
 	bIsReloadTransitionPlaying = true;
 
 	if (RoundTransitionWidgetInstance)
@@ -633,6 +687,8 @@ void ABuckshotGameMode::PlayRoundTransitionUI(
 
 void ABuckshotGameMode::OnReloadTransitionFinished()
 {
+	if (bIsEndingPlaying) return;
+
 	GetWorldTimerManager().ClearTimer(
 		ReloadTransitionFallbackHandle
 	);
@@ -673,6 +729,8 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 
 void ABuckshotGameMode::LoadMagazine(int32 MaxShells)
 {
+	if (bIsEndingPlaying) return;
+
 	Magazine.Empty();
 
 	const int32 TotalShells =
@@ -1018,6 +1076,8 @@ bool ABuckshotGameMode::ShootTarget(
 
 void ABuckshotGameMode::StartNextRound()
 {
+	if (bIsEndingPlaying) return;
+
 	GetWorldTimerManager().ClearTimer(
 		RoundTimerHandle
 	);
@@ -1107,6 +1167,8 @@ void ABuckshotGameMode::ProcessDealerDecision()
 
 void ABuckshotGameMode::SwitchTurn()
 {
+	if (bIsEndingPlaying) return;
+
 	if (IsCuff)
 	{
 		IsCuff = false;
@@ -1153,6 +1215,8 @@ void ABuckshotGameMode::SwitchTurn()
 
 void ABuckshotGameMode::ResetCurrentRound()
 {
+	if (bIsEndingPlaying) return;
+
 	GetWorldTimerManager().ClearTimer(
 		RestartTimerHandle
 	);
@@ -1203,7 +1267,7 @@ void ABuckshotGameMode::ResetCurrentRound()
 
 void ABuckshotGameMode::ExecutePendingItemUse()
 {
-
+	if (bIsEndingPlaying) return;
 
 	const int32 SlotIndex = PendingItemSlotIndex;
 	const bool bIsPlayer = bPendingItemIsPlayer;
@@ -1314,6 +1378,8 @@ void ABuckshotGameMode::ExecutePendingItemUse()
 // ======================================================
 EBulletType ABuckshotGameMode::PeekNextShell()
 {
+	if (bIsEndingPlaying) return EBulletType::Blank;
+
 	if (Magazine.Num() == 0)
 	{
 		return EBulletType::Blank;
@@ -1355,7 +1421,7 @@ EBulletType ABuckshotGameMode::PeekNextShell()
 // ======================================================
 EBulletType ABuckshotGameMode::EjectCurrentShell()
 {
-	if (bIsReloadTransitionPlaying)
+	if (bIsEndingPlaying || bIsReloadTransitionPlaying)
 	{
 		return EBulletType::Blank;
 	}
@@ -1390,6 +1456,8 @@ EBulletType ABuckshotGameMode::EjectCurrentShell()
 // ======================================================
 bool ABuckshotGameMode::UseCigarette()
 {
+	if (bIsEndingPlaying) return false;
+
 	int32& CurrentHP = IsPlayerTurn ? PlayerHP : DealerHP;
 
 	if (CurrentHP < MaxHP)
@@ -1418,6 +1486,8 @@ bool ABuckshotGameMode::UseCigarette()
 // ======================================================
 void ABuckshotGameMode::UseSaw()
 {
+	if (bIsEndingPlaying) return;
+
 	IsSawOff = true;
 
 	if (GEngine)
@@ -1437,6 +1507,8 @@ void ABuckshotGameMode::UseSaw()
 // ======================================================
 bool ABuckshotGameMode::UseHandcuffs()
 {
+	if (bIsEndingPlaying) return false;
+
 	if (!IsCuff)
 	{
 		IsCuff = true;
@@ -1462,6 +1534,8 @@ bool ABuckshotGameMode::UseHandcuffs()
 // ======================================================
 bool ABuckshotGameMode::UsePhone(int32& OutIndex, EBulletType& OutType)
 {
+	if (bIsEndingPlaying) return false;
+
 	if (Magazine.Num() <= 1)
 	{
 		return false;
