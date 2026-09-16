@@ -18,6 +18,9 @@ class BUCKSHOTMOJAK_API UBattleUIWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	UFUNCTION(BlueprintCallable, Category = "ShellDisplay")
+	void ShowCurrentMagazine();
+
 	// 탄 종류에 따라 이미지를 바꾸고 화면에 띄우는 함수 (C++ 구현)
 	UFUNCTION(BlueprintCallable, Category = "ShellDisplay")
 	void ShowEjectedShell(EBulletType BulletType);
@@ -186,6 +189,8 @@ protected:
 
 
 private:
+	FTimerHandle MagnifierDisplayTimerHandle;
+
 	FTimerHandle ShellImageTimerHandle;
 	void HideShellImage();
 

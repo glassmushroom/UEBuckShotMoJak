@@ -50,7 +50,7 @@ void UItemSlotWidget::SetSlotData(EItemType InType,UTexture2D* InTexture,int32 I
 	// 완전히 비어 있는 슬롯
 	// ==================================================
 
-	if (InType == EItemType::None)
+	if (InType == EItemType::None || InCount <= 0)
 	{
 		ClearSlot();
 		return;
@@ -62,11 +62,24 @@ void UItemSlotWidget::SetSlotData(EItemType InType,UTexture2D* InTexture,int32 I
 
 	if (ItemImage)
 	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[ItemSlot] ItemImage VALID")
+		);
+
 		if (InTexture)
 		{
 			ItemImage->SetBrushFromTexture(InTexture);
 			ItemImage->SetVisibility(
 				ESlateVisibility::Visible
+			);
+
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("[ItemSlot] Image Set -> %s"),
+				*InTexture->GetName()
 			);
 		}
 		else
@@ -74,7 +87,21 @@ void UItemSlotWidget::SetSlotData(EItemType InType,UTexture2D* InTexture,int32 I
 			ItemImage->SetVisibility(
 				ESlateVisibility::Collapsed
 			);
+
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[ItemSlot] InTexture NULL")
+			);
 		}
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[ItemSlot] ItemImage is NULL!")
+		);
 	}
 
 	// ==================================================

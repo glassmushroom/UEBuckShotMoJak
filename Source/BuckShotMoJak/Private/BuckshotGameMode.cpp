@@ -20,7 +20,7 @@ namespace
 		{
 		case 1:
 			// 1라운드에는 아이템을 지급하지 않는다.
-			return 0;
+			return 2;
 
 		case 2:
 			// 2라운드부터 지급
@@ -275,6 +275,17 @@ void ABuckshotGameMode::AddItemToInventorySlot(
 			return;
 		}
 	}
+
+	for (FItemSlot& Slot : Inventory)
+	{
+		if (Slot.ItemType == EItemType::None ||
+			Slot.Quantity <= 0)
+		{
+			Slot.ItemType = Item;
+			Slot.Quantity = 1;
+			return;
+		}
+	}
 }
 
 // ======================================================
@@ -435,58 +446,51 @@ UTexture2D* ABuckshotGameMode::GetItemTexture(
 	EItemType ItemType
 ) const
 {
+	UTexture2D* Texture = nullptr;
+
 	switch (ItemType)
 	{
 	case EItemType::Saw:
-		return SawTexture;
+		Texture = SawTexture;
+		break;
 
 	case EItemType::Phone:
-		return PhoneTexture;
+		Texture = PhoneTexture;
+		break;
 
 	case EItemType::Magnifier:
-		return MagnifierTexture;
+		Texture = MagnifierTexture;
+		break;
 
 	case EItemType::Beer:
-		return BeerTexture;
+		Texture = BeerTexture;
+		break;
 
 	case EItemType::Cigarette:
-		return CigaretteTexture;
+		Texture = CigaretteTexture;
+		break;
 
 	case EItemType::Handcuffs:
-		return HandcuffsTexture;
+		Texture = HandcuffsTexture;
+		break;
 
 	default:
-		return nullptr;
-	}
-}
-
-// ======================================================
-// 특정 아이템 전체 수량
-// ======================================================
-
-int32 ABuckshotGameMode::GetItemCountInInventory(
-	EItemType ItemType,
-	bool bIsPlayer
-) const
-{
-	const TArray<FItemSlot>& Inventory =
-		bIsPlayer
-		? PlayerInventory
-		: DealerInventory;
-
-	int32 TotalQuantity = 0;
-
-	for (const FItemSlot& ItemSlot : Inventory)
-	{
-		if (ItemSlot.ItemType == ItemType)
-		{
-			TotalQuantity += ItemSlot.Quantity;
-		}
+		Texture = nullptr;
+		break;
 	}
 
-	return TotalQuantity;
-}
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[ItemTexture] Type=%d / Texture=%s"),
+		static_cast<int32>(ItemType),
+		Texture
+		? *Texture->GetName()
+		: TEXT("NULL")
+	);
 
+	return Texture;
+}
 FItemSlot ABuckshotGameMode::GetPlayerItemSlot(
 	int32 SlotIndex
 ) const
@@ -695,30 +699,31 @@ void ABuckshotGameMode::OnReloadTransitionFinished()
 
 	bIsReloadTransitionPlaying = false;
 
+	IsPlayerTurn = true;
+
 	LoadMagazine(
 		CurrentRound == 1
 		? 4
 		: 8
 	);
 
-	if (IsPlayerTurn)
+	if (BattleUIWidgetInstance)
 	{
-		if (BattleUIWidgetInstance)
-		{
-			BattleUIWidgetInstance->RefreshItemSlots();
-			OnTurnChanged.Broadcast(IsPlayerTurn);
-		}
+		BattleUIWidgetInstance->RefreshItemSlots();
+		BattleUIWidgetInstance->SetButtonsEnabled(false);
 	}
-	else
-	{
-		FTimerHandle DealerTurnTimer;
 
-		GetWorldTimerManager().SetTimer(
-			DealerTurnTimer,
-			this,
-			&ABuckshotGameMode::TriggerDealerTurn,
-			1.0f,
-			false
+	OnTurnChanged.Broadcast(
+		IsPlayerTurn
+	);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			3.0f,
+			FColor::Green,
+			TEXT("[재장전 완료] 플레이어 턴으로 전환")
 		);
 	}
 }
@@ -1329,6 +1334,12 @@ void ABuckshotGameMode::ExecutePendingItemUse()
 		if (Magazine.Num() > 0)
 		{
 			PeekNextShell();
+
+			if (BattleUIWidgetInstance)
+			{
+				BattleUIWidgetInstance->ShowCurrentMagazine();
+			}
+
 			bSuccess = true;
 		}
 		break;

@@ -75,6 +75,7 @@ void ADealrAIController::TakeTurn(ABuckshotGameMode* GameMode)
 
     // AI 상태 시작
     bIsThinking = true;
+    bHasUsedItemThisTurn = false;
 
     // 이전에 알고 있던 정보 초기화
     KnowNextShell.Reset();
@@ -233,159 +234,284 @@ bool ADealrAIController::TryUseItem()
         return false;
     }
 
-
-    // 기존 AI의 아이템 우선순위
-    const TArray<EItemType> ItemPriority =
+    if (bHasUsedItemThisTurn)
     {
-        EItemType::Cigarette,
-        EItemType::Magnifier,
-        EItemType::Saw,
-        EItemType::Handcuffs,
-        EItemType::Beer,
-        EItemType::Phone
-    };
+        return false;
+    }
+
+    if (CachedGameMode->IsPlayerTurn)
+    {
+        return false;
+    }
+
+    if (CachedGameMode->IsItemUseInProgress())
+    {
+        return false;
+    }
+
+    const int32 DealerHP =
+        CachedGameMode->GetDealerHP();
+
+    const int32 MaxHP =
+        CachedGameMode->GetMaxHP();
+
+    const int32 PlayerHP =
+        CachedGameMode->PlayerHP;
+
+    const int32 MagazineCount =
+        CachedGameMode->GetMagazineCount();
+
+    if (MagazineCount <= 0)
+    {
+        return false;
+    }
+
+    const int32 TotalShells =
+        KnowLiveCount + KnowBlankCount;
+
+    float LiveProbability = 0.5f;
+
+    if (TotalShells > 0)
+    {
+        LiveProbability =
+            static_cast<float>(KnowLiveCount) /
+            static_cast<float>(TotalShells);
+    }
 
 
     // ========================================================
-    // 우선순위 순서대로 아이템 확인
+    // 1. 담배
     // ========================================================
 
-    for (EItemType ItemType : ItemPriority)
+    if (DealerHP < MaxHP)
     {
-        int32 ItemIndex = INDEX_NONE;
+        const bool bLowHP =
+            DealerHP <= 1;
 
-        if (!HasItem(ItemType, ItemIndex))
+        const bool bWorthHealing =
+            bLowHP ||
+            DealerHP < MaxHP / 2;
+
+        if (bWorthHealing)
         {
-            continue;
-        }
+            int32 ItemIndex = INDEX_NONE;
 
-
-        // ----------------------------------------------------
-        // 담배
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Cigarette)
-        {
-            if (CachedGameMode->GetDealerHP() >=
-                CachedGameMode->GetMaxHP())
+            if (HasItem(EItemType::Cigarette, ItemIndex))
             {
-                continue;
+                if (CachedGameMode->UseItemByType(
+                    EItemType::Cigarette,
+                    false))
+                {
+                    bHasUsedItemThisTurn = true;
+
+                    //if (GEngine)
+                    //{
+                    //    GEngine->AddOnScreenDebugMessage(
+                    //        -1,
+                    //        3.0f,
+                    //        FColor::Yellow,
+                    //        TEXT("[DealerAI] 상황 판단 -> 체력이 낮아 회복 아이템 사용")
+                    //    );
+                    //}
+
+                    return true;
+                }
             }
-        }
-
-
-        // ----------------------------------------------------
-        // 돋보기
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Magnifier)
-        {
-            if (KnowNextShell.IsSet())
-            {
-                continue;
-            }
-
-            /*
-             * 기존 AI의 돋보기 정보 확인.
-             *
-             * 실제 아이템 소모/지연 처리는
-             * GameMode의 UseItemByType()에 맡긴다.
-             */
-        }
-
-
-        // ----------------------------------------------------
-        // 톱
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Saw)
-        {
-            if (CachedGameMode->GetIsSawOff())
-            {
-                continue;
-            }
-
-            /*
-             * 기존 AI에서는 다음 상태가 확인된 경우
-             * 톱 사용을 우선하도록 되어 있었다.
-             *
-             * 여기서는 GameMode의 아이템 처리 구조와
-             * 충돌하지 않도록 UseItemByType()을 사용한다.
-             */
-        }
-
-
-        // ----------------------------------------------------
-        // 수갑
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Handcuffs)
-        {
-            if (CachedGameMode->GetIsCuff())
-            {
-                continue;
-            }
-        }
-
-
-        // ----------------------------------------------------
-        // 맥주
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Beer)
-        {
-            /*
-             * 기존 코드에서는 다음 상태를 알고 있고
-             * 특정 조건일 때 사용하는 구조였다.
-             *
-             * 실제 처리는 GameMode에 맡긴다.
-             */
-        }
-
-
-        // ----------------------------------------------------
-        // 핸드폰
-        // ----------------------------------------------------
-
-        if (ItemType == EItemType::Phone)
-        {
-            if (CachedGameMode->GetMagazineCount() <= 1)
-            {
-                continue;
-            }
-        }
-
-
-        // ====================================================
-        // GameMode를 통해 아이템 사용
-        // ====================================================
-
-        if (CachedGameMode->UseItemByType(
-            ItemType,
-            false))
-        {
-            if (GEngine)
-            {
-                FString DebugText =
-                    FString::Printf(
-                        TEXT("[DealerAI] 아이템 사용 성공 -> %d"),
-                        static_cast<int32>(ItemType)
-                    );
-
-                GEngine->AddOnScreenDebugMessage(
-                    -1,
-                    3.0f,
-                    FColor::Yellow,
-                    DebugText
-                );
-            }
-
-            return true;
         }
     }
 
 
-    // 사용할 아이템 없음
+    // ========================================================
+    // 2. 돋보기
+    // ========================================================
+
+    if (!KnowNextShell.IsSet())
+    {
+        const bool bUncertainSituation =
+            FMath::Abs(KnowLiveCount - KnowBlankCount) <= 1;
+
+        if (bUncertainSituation)
+        {
+            int32 ItemIndex = INDEX_NONE;
+
+            if (HasItem(EItemType::Magnifier, ItemIndex))
+            {
+                if (CachedGameMode->UseItemByType(
+                    EItemType::Magnifier,
+                    false))
+                {
+                    bHasUsedItemThisTurn = true;
+
+                    //if (GEngine)
+                    //{
+                    //    GEngine->AddOnScreenDebugMessage(
+                    //        -1,
+                    //        3.0f,
+                    //        FColor::Yellow,
+                    //        TEXT("[DealerAI] 상황 판단 -> 탄창 정보가 불확실해 확인 아이템 사용")
+                    //    );
+                    //}
+
+                    return true;
+                }
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 3. 수갑
+    // ========================================================
+
+    if (!CachedGameMode->GetIsCuff())
+    {
+        const bool bPlayerHasAdvantage =
+            PlayerHP > DealerHP;
+
+        const bool bEnoughShells =
+            MagazineCount >= 3;
+
+        if (bPlayerHasAdvantage && bEnoughShells)
+        {
+            int32 ItemIndex = INDEX_NONE;
+
+            if (HasItem(EItemType::Handcuffs, ItemIndex))
+            {
+                if (CachedGameMode->UseItemByType(
+                    EItemType::Handcuffs,
+                    false))
+                {
+                    bHasUsedItemThisTurn = true;
+
+                    //if (GEngine)
+                    //{
+                    //    GEngine->AddOnScreenDebugMessage(
+                    //        -1,
+                    //        3.0f,
+                    //        FColor::Yellow,
+                    //        TEXT("[DealerAI] 상황 판단 -> 불리한 상황이라 제어 아이템 사용")
+                    //    );
+                    //}
+
+                    return true;
+                }
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 4. 톱
+    // ========================================================
+
+    if (!CachedGameMode->GetIsSawOff())
+    {
+        const bool bStrongSituation =
+            LiveProbability >= 0.6f;
+
+        const bool bEnoughShells =
+            MagazineCount >= 2;
+
+        if (bStrongSituation && bEnoughShells)
+        {
+            int32 ItemIndex = INDEX_NONE;
+
+            if (HasItem(EItemType::Saw, ItemIndex))
+            {
+                if (CachedGameMode->UseItemByType(
+                    EItemType::Saw,
+                    false))
+                {
+                    bHasUsedItemThisTurn = true;
+
+                    //if (GEngine)
+                    //{
+                    //    GEngine->AddOnScreenDebugMessage(
+                    //        -1,
+                    //        3.0f,
+                    //        FColor::Yellow,
+                    //        TEXT("[DealerAI] 상황 판단 -> 유리한 탄창 상황에서 강화 아이템 사용")
+                    //    );
+                    //}
+
+                    return true;
+                }
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 5. 맥주
+    // ========================================================
+
+    if (MagazineCount >= 4)
+    {
+        int32 ItemIndex = INDEX_NONE;
+
+        if (HasItem(EItemType::Beer, ItemIndex))
+        {
+            if (CachedGameMode->UseItemByType(
+                EItemType::Beer,
+                false))
+            {
+                bHasUsedItemThisTurn = true;
+
+                //if (GEngine)
+                //{
+                //    GEngine->AddOnScreenDebugMessage(
+                //        -1,
+                //        3.0f,
+                //        FColor::Yellow,
+                //        TEXT("[DealerAI] 상황 판단 -> 탄창이 길어 정리 아이템 사용")
+                //    );
+                //}
+
+                return true;
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 6. 핸드폰
+    // ========================================================
+
+    if (MagazineCount >= 3)
+    {
+        const bool bInformationNeeded =
+            !KnowNextShell.IsSet() &&
+            FMath::Abs(KnowLiveCount - KnowBlankCount) <= 1;
+
+        if (bInformationNeeded)
+        {
+            int32 ItemIndex = INDEX_NONE;
+
+            if (HasItem(EItemType::Phone, ItemIndex))
+            {
+                if (CachedGameMode->UseItemByType(
+                    EItemType::Phone,
+                    false))
+                {
+                    bHasUsedItemThisTurn = true;
+
+                    //if (GEngine)
+                    //{
+                    //    GEngine->AddOnScreenDebugMessage(
+                    //        -1,
+                    //        3.0f,
+                    //        FColor::Yellow,
+                    //        TEXT("[DealerAI] 상황 판단 -> 정보가 부족해 확인 아이템 사용")
+                    //    );
+                    //}
+
+                    return true;
+                }
+            }
+        }
+    }
+
+
     return false;
 }
 

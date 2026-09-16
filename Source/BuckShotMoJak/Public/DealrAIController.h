@@ -52,4 +52,5 @@ private:
     int32 KnowBlankCount;
 
     bool bIsThinking;
+    bool bHasUsedItemThisTurn = false;
 };
