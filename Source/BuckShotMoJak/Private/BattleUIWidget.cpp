@@ -148,24 +148,25 @@ void UBattleUIWidget::ShowEjectedShell(EBulletType BulletType)
 		return;
 	}
 
-	// 탄 종류에 따라 텍스처 교체
+	// [안전장치 추가] 텍스처 자체가 할당되어 있는지 반드시 확인
 	UTexture2D* SelectedTexture = (BulletType == EBulletType::Live) ? LiveShellTexture : BlankShellTexture;
-
-	if (SelectedTexture)
+	if (!SelectedTexture)
 	{
-		ShellDisplayImage->SetBrushFromTexture(SelectedTexture);
-		ShellDisplayImage->SetVisibility(ESlateVisibility::Visible);
-
-		// 1초 뒤에 이미지를 다시 숨김
-		GetWorld()->GetTimerManager().ClearTimer(ShellImageTimerHandle);
-		GetWorld()->GetTimerManager().SetTimer(
-			ShellImageTimerHandle,
-			this,
-			&UBattleUIWidget::HideShellImage,
-			1.0f,
-			false
-		);
+		UE_LOG(LogTemp, Warning, TEXT("[BattleUIWidget] LiveShellTexture 또는 BlankShellTexture가 할당되지 않았습니다!"));
+		return;
 	}
+
+	ShellDisplayImage->SetBrushFromTexture(SelectedTexture);
+	ShellDisplayImage->SetVisibility(ESlateVisibility::Visible);
+
+	GetWorld()->GetTimerManager().ClearTimer(ShellImageTimerHandle);
+	GetWorld()->GetTimerManager().SetTimer(
+		ShellImageTimerHandle,
+		this,
+		&UBattleUIWidget::HideShellImage,
+		1.0f,
+		false
+	);
 }
 
 void UBattleUIWidget::SetButtonsEnabled(

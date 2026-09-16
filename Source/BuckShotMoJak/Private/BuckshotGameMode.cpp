@@ -1321,15 +1321,30 @@ EBulletType ABuckshotGameMode::PeekNextShell()
 
 	const EBulletType NextShell = Magazine[0];
 
-	if (GEngine)
+	// 플레이어 턴일 때만 실행
+	if (IsPlayerTurn)
 	{
-		const TCHAR* ShellText = (NextShell == EBulletType::Live) ? TEXT("실탄") : TEXT("공포탄");
-		GEngine->AddOnScreenDebugMessage(
-			-1,
-			3.0f,
-			FColor::Cyan,
-			FString::Printf(TEXT("[돋보기 효과] 다음 탄은 [%s]입니다."), ShellText)
-		);
+		if (GEngine)
+		{
+			const TCHAR* ShellText = (NextShell == EBulletType::Live) ? TEXT("실탄") : TEXT("공포탄");
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				3.0f,
+				FColor::Cyan,
+				FString::Printf(TEXT("[돋보기 효과] 다음 탄은 [%s]입니다."), ShellText)
+			);
+		}
+
+		// [핵심] 이 한 줄이 빠져 있어서 화면에 탄 이미지가 안 나왔던 것입니다! 
+		// 기존에 사격/맥주 때 쓰던 위젯 표시 함수를 돋보기에서도 그대로 호출해 줍니다.
+		if (BattleUIWidgetInstance)
+		{
+			BattleUIWidgetInstance->ShowEjectedShell(NextShell);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("[돋보기 효과] 상대방이 돋보기를 사용했습니다. (비공개)"));
 	}
 
 	return NextShell;
